@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Humble Library Manager"
+version: "2.1.0"
+date-released: "2026-09-29"
+authors:
+  - given-names: "Arun"
+    family-names: "Sutharshan"
+license: "MIT"
+url: "https://www.sutharshan.co.uk"
+type: software

@@ -1,0 +1,15 @@
+{
+  "name": "Humble Library Manager",
+  "version": "2.1.0",
+  "release_date": "2026-09-29",
+  "original_creator": {
+    "name": "Arun Sutharshan",
+    "website": "https://www.sutharshan.co.uk",
+    "email": "arun@sutharshan.co.uk"
+  },
+  "project_type": "Community open-source project",
+  "origin": "Personal/non-business project",
+  "license": "MIT",
+  "catalogue_schema_version": "1.0",
+  "development_note": "AI-assisted development tools were used; human maintainers remain responsible for review, testing and releases."
+}
