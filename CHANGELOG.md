@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.1.4] - 2026-09-29
+
+### Added
+- Existing-library detection and incremental library workflow.
+- Overall `[X of total] Purchase — filename` progress.
+- Separate current-file progress bar with downloaded bytes, total size and percentage.
+- Periodic large-file progress messages in the log.
+- Persistent per-file download/checksum status.
+- Catalogue reconciliation across current Humble metadata, previous catalogue and local files.
+
+### Changed
+- Previously retained checksum-mismatch files are treated as downloaded and are not automatically downloaded again.
+- Catalogue main and purchase pages are rebuilt with existing local files and relative local links.
+- Historical catalogue purchases no longer returned by Humble are retained.
+- Main action is labelled Download New / Missing Selected.
+
+### Fixed
+- Existing/previously downloaded files being omitted from regenerated catalogue pages.
+- Catalogue local links now use the reconciled actual archive path.
+
+
 ## [2.1.3] - 2026-09-29
 
 ### Added
