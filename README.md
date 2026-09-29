@@ -2,7 +2,7 @@
 
 **Browse, catalogue and back up downloadable content from your own Humble library.**
 
-**Version 2.1.2 · 29 September 2026**
+**Version 2.1.3 · 29 September 2026**
 
 Originally created by **Arun Sutharshan**  
 Website: https://www.sutharshan.co.uk  
@@ -84,8 +84,13 @@ The software is provided **as-is and without warranty**. Use it at your own risk
 
 ## Windows path handling
 
-Version 2.1.2 shortens long generated archive path components using deterministic hashes. Full Humble names remain in catalogue metadata. A path creation failure is logged against that file rather than stopping the complete download job.
+Version 2.1.3 shortens long generated archive path components using deterministic hashes. Full Humble names remain in catalogue metadata. A path creation failure is logged against that file rather than stopping the complete download job.
 
 ## Retry and checksum behaviour
 
-Version 2.1.2 numbers final file outcomes (`1 of N`, `2 of N`, etc.). Genuine HTTP/network/filesystem failures are placed at the end of a rotational retry queue for up to five total attempts per file. Checksum mismatches are not repeatedly downloaded: the completed file is retained and clearly flagged with the expected and calculated checksum.
+Version 2.1.3 numbers final file outcomes (`1 of N`, `2 of N`, etc.). Genuine HTTP/network/filesystem failures are placed at the end of a rotational retry queue for up to five total attempts per file. Checksum mismatches are not repeatedly downloaded: the completed file is retained and clearly flagged with the expected and calculated checksum.
+
+
+## v2.1.3 reliability and UI
+
+Adds a fixed catalogue exporter using shared path utilities, an in-app cookie help guide, custom favicon, credits footer, persistent download-session metadata, Resume Previous Download, and Windows sleep prevention while an active download worker is running. Screen locking/display-off remain unaffected.

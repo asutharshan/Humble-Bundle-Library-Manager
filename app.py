@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-import hashlib,json,os,re,threading,uuid
+import hashlib,json,os,re,threading,uuid,ctypes
 from concurrent.futures import ThreadPoolExecutor,as_completed
 from datetime import datetime
 from pathlib import Path
@@ -10,31 +10,20 @@ from flask import Flask,jsonify,render_template,request
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from catalogue import export_catalogue
+from library_paths import safe,title,year,category,archive_path
 
-app=Flask(__name__); BASE="https://www.humblebundle.com"
+app=Flask(__name__); BASE="https://www.humblebundle.com"; VERSION="2.1.3"
+def prevent_sleep(enable=True):
+ try:
+  if os.name=="nt":
+   ES_CONTINUOUS=0x80000000;ES_SYSTEM_REQUIRED=0x00000001
+   ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS|ES_SYSTEM_REQUIRED if enable else ES_CONTINUOUS)
+ except Exception:pass
+def queue_file(root):return Path(root).expanduser()/"_library"/"download_queue.json"
+def save_queue(root,payload):
+ q=queue_file(root);q.parent.mkdir(parents=True,exist_ok=True);q.write_text(json.dumps(payload,indent=2),encoding="utf-8")
+
 STATE={"cookie":None,"orders":[],"details":{},"jobs":{}}; LOCK=threading.Lock()
-BAD=re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-def safe(s,n=80):
- s=re.sub(r'[<>:"/\\|?*\x00-\x1f]',"_",(s or "Unknown").strip())
- s=re.sub(r"\s+"," ",s).strip(" .") or "Unknown"
- if len(s)<=n:return s
- digest=hashlib.sha1(s.encode("utf-8")).hexdigest()[:8]
- keep=max(12,n-len(digest)-3)
- return s[:keep].rstrip(" ._-")+"__"+digest
-
-def archive_path(root,o,f,max_total=235):
- parts=[safe(category(o),36),safe(year(o),20),safe(title(o),58),safe(f["product"],58),safe(str(f["platform"]),28),safe(f["filename"],90)]
- dest=Path(root).joinpath(*parts)
- try: total=len(str(dest.resolve()))
- except Exception: total=len(str(dest.absolute()))
- if total>max_total:
-  over=total-max_total
-  for idx,min_len in ((3,28),(2,28),(5,45),(0,20),(4,16)):
-   if over<=0:break
-   cur=parts[idx]; target=max(min_len,len(cur)-over); short=safe(cur,target)
-   over-=max(0,len(cur)-len(short));parts[idx]=short
-  dest=Path(root).joinpath(*parts)
- return dest
 def session():
  s=requests.Session(); s.headers.update({"User-Agent":"HumbleLibraryManager/2.0","Referer":BASE+"/home/library"})
  if STATE["cookie"]: s.cookies.set("_simpleauth_sess",STATE["cookie"],domain=".humblebundle.com")
@@ -44,21 +33,6 @@ def getj(url):
  r=session().get(url,timeout=60)
  if r.status_code in (401,403): raise RuntimeError("Authentication rejected. Refresh _simpleauth_sess.")
  r.raise_for_status(); return r.json()
-def title(o):
- p=o.get("product") or {}; return p.get("human_name") or p.get("machine_name") or "Humble Purchase"
-def year(o):
- m=re.search(r"(?:19|20)\d{2}",str(o.get("created") or "")); return m.group(0) if m else "Unknown Year"
-def category(o):
- vals=[]; p=o.get("product") or {}; vals += [str(p.get(k,"")) for k in ("human_name","machine_name","category")]
- for sp in o.get("subproducts") or []:
-  vals += [str(sp.get(k,"")) for k in ("human_name","machine_name")]
-  vals += [str(d.get("platform","")) for d in sp.get("downloads") or []]
- t=" ".join(vals).lower()
- if any(x in t for x in ("ebook","book bundle","books bundle")): return "Books"
- if any(x in t for x in ("audio","music bundle")): return "Audio"
- if "software" in t: return "Software"
- if any(x in t for x in ("windows","linux","mac","android")): return "Games & Software"
- return "Other"
 def files(o):
  out=[]
  for pi,sp in enumerate(o.get("subproducts") or []):
@@ -115,6 +89,29 @@ def catalogue_export():
   return jsonify(ok=True,index=str(Path(dest)/"index.html"),statistics=m["statistics"])
  except Exception as e:return jsonify(error=str(e)),500
 
+@app.post("/api/resume-info")
+def resume_info():
+ b=request.json or {};dest=(b.get("destination") or "").strip()
+ if not dest:return jsonify(found=False)
+ q=queue_file(dest)
+ if not q.exists():return jsonify(found=False)
+ try:
+  x=json.loads(q.read_text(encoding="utf-8"))
+  if x.get("status") in ("completed","cancelled"):return jsonify(found=False)
+  return jsonify(found=True,total=x.get("total",0),completed=len(x.get("completed_ids",[])),remaining=len(x.get("remaining",[])))
+ except Exception:return jsonify(found=False)
+
+@app.post("/api/resume")
+def resume():
+ b=request.json or {};dest=(b.get("destination") or "").strip();q=queue_file(dest)
+ if not q.exists():return jsonify(error="No incomplete download session found."),404
+ try:x=json.loads(q.read_text(encoding="utf-8"))
+ except Exception as e:return jsonify(error=str(e)),400
+ if not STATE["details"]:return jsonify(error="Load the Humble library first, then resume."),400
+ keys=x.get("keys") or [];picks=x.get("file_ids") or {}
+ jid=str(uuid.uuid4());STATE["jobs"][jid]={"status":"queued","total":0,"done":0,"downloaded":0,"verified":0,"checksum_mismatch":0,"skipped":0,"failed":0,"retrying":0,"bytes_done":0,"current":"","logs":[],"cancel":False,"destination":dest}
+ threading.Thread(target=run,args=(jid,keys,picks),daemon=True).start();return jsonify(job_id=jid)
+
 @app.post("/api/start")
 def start():
  b=request.json or {};dest=(b.get("destination") or "").strip()
@@ -129,7 +126,7 @@ def digest(p,a):
   for b in iter(lambda:fh.read(1048576),b""):h.update(b)
  return h.hexdigest()
 def run(jid,keys,picks):
- j=STATE["jobs"][jid];j["status"]="running";tasks=[]
+ j=STATE["jobs"][jid];j["status"]="running";tasks=[];prevent_sleep(True)
  for k in keys:
   o=STATE["details"].get(k)
   if not o:continue
@@ -138,10 +135,14 @@ def run(jid,keys,picks):
    if chosen is not None and f["id"] not in set(chosen):continue
    tasks.append((o,f))
  j["total"]=len(tasks);log(j,f"Queue contains {len(tasks)} files.")
+ save_queue(j["destination"],{"version":VERSION,"status":"running","total":len(tasks),"keys":keys,"file_ids":{k:list(v) if isinstance(v,set) else v for k,v in picks.items()},"completed_ids":[],"remaining":[f["id"]+"|"+str(o.get("gamekey")) for o,f in tasks]})
  root=Path(j["destination"]).expanduser()
  pending=[(o,f,1) for o,f in tasks]
  final_done=0
  max_attempts=5
+ completed_ids=[]
+ def checkpoint():
+  save_queue(root,{"version":VERSION,"status":j["status"],"total":j["total"],"keys":keys,"file_ids":{k:list(v) if isinstance(v,set) else v for k,v in picks.items()},"completed_ids":completed_ids,"remaining":[f["id"]+"|"+str(o.get("gamekey")) for o,f,a in pending]})
  while pending and not j["cancel"]:
   current=pending;pending=[]
   round_no=current[0][2] if current else 1
@@ -159,12 +160,12 @@ def run(jid,keys,picks):
     if attempt<max_attempts:
      pending.append((o,f,attempt+1));log(j,f"{prefix} PATH ERROR — queued for retry: {f['filename']} — {e}","error")
     else:
-     j["failed"]+=1;j["done"]+=1;final_done+=1;log(j,f"{prefix} FAILED after {max_attempts} attempts: {f['filename']} — {e}","error")
+     j["failed"]+=1;j["done"]+=1;final_done+=1;completed_ids.append(f["id"]+"|"+str(o.get("gamekey")));checkpoint();log(j,f"{prefix} FAILED after {max_attempts} attempts: {f['filename']} — {e}","error")
     continue
    try:
     sz=f.get("size")
     if dest.exists() and ((sz and dest.stat().st_size==int(sz)) or not sz):
-     j["skipped"]+=1;j["done"]+=1;final_done+=1;log(j,f"{prefix} Skipped existing: {dest.name}","skip");continue
+     j["skipped"]+=1;j["done"]+=1;final_done+=1;completed_ids.append(f["id"]+"|"+str(o.get("gamekey")));checkpoint();log(j,f"{prefix} Skipped existing: {dest.name}","skip");continue
     part=Path(str(dest)+".part");pos=part.stat().st_size if part.exists() else 0;headers={"Range":f"bytes={pos}-"} if pos else {}
     r=session().get(f["url"],stream=True,timeout=90,headers=headers)
     if pos and r.status_code!=206:
@@ -180,7 +181,7 @@ def run(jid,keys,picks):
     actual=digest(part,alg).lower() if chk else None
     mismatch=bool(chk and actual!=str(chk).lower())
     os.replace(part,dest)
-    j["downloaded"]+=1;j["done"]+=1;final_done+=1
+    j["downloaded"]+=1;j["done"]+=1;final_done+=1;completed_ids.append(f["id"]+"|"+str(o.get("gamekey")));checkpoint()
     if mismatch:
      j["checksum_mismatch"]+=1
      log(j,f"{prefix} Downloaded — CHECKSUM MISMATCH: {f['product']} / {f['filename']} | expected {alg.upper()}={chk} | actual={actual}","warn")
@@ -192,12 +193,14 @@ def run(jid,keys,picks):
     if attempt<max_attempts:
      pending.append((o,f,attempt+1));log(j,f"{prefix} FAILED — queued for retry: {f['filename']} — {e}","error")
     else:
-     j["failed"]+=1;j["done"]+=1;final_done+=1;log(j,f"{prefix} FAILED after {max_attempts} attempts: {f['filename']} — {e}","error")
+     j["failed"]+=1;j["done"]+=1;final_done+=1;completed_ids.append(f["id"]+"|"+str(o.get("gamekey")));checkpoint();log(j,f"{prefix} FAILED after {max_attempts} attempts: {f['filename']} — {e}","error")
   j["retrying"]=len(pending)
  j["current"]="";j["retrying"]=0;j["status"]="cancelled" if j["cancel"] else "completed"
  lib=root/"_library";lib.mkdir(parents=True,exist_ok=True)
  summary={k:v for k,v in j.items() if k not in ("logs","cancel")}
  (lib/"latest_download.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
+ save_queue(root,{"version":VERSION,"status":j["status"],"total":j["total"],"keys":keys,"file_ids":{k:list(v) if isinstance(v,set) else v for k,v in picks.items()},"completed_ids":completed_ids,"remaining":[] if j["status"]=="completed" else [f["id"]+"|"+str(o.get("gamekey")) for o,f,a in pending]})
+ prevent_sleep(False)
  if not j["cancel"]:
   log(j,f"Completed: {j['downloaded']} downloaded ({j['verified']} checksum verified, {j['checksum_mismatch']} checksum mismatch), {j['skipped']} skipped, {j['failed']} failed after retries.")
  else:log(j,"Download run cancelled.")

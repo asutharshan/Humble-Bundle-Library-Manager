@@ -6,32 +6,9 @@ from urllib.parse import urlparse, unquote, quote
 import yaml
 
 SCHEMA_VERSION="1.0"
-VERSION="2.1.2"
+VERSION="2.1.3"
 
-def safe(s):
-    s=re.sub(r'[<>:"/\\|?*\x00-\x1f]',"_",(s or "Unknown").strip())
-    return re.sub(r"\s+"," ",s).strip(" .") or "Unknown"
-
-def title(o):
-    p=o.get("product") or {}
-    return p.get("human_name") or p.get("machine_name") or "Humble Purchase"
-
-def year(o):
-    m=re.search(r"(?:19|20)\d{2}",str(o.get("created") or ""))
-    return m.group(0) if m else "Unknown Year"
-
-def category(o):
-    vals=[]; p=o.get("product") or {}
-    vals += [str(p.get(k,"")) for k in ("human_name","machine_name","category")]
-    for sp in o.get("subproducts") or []:
-        vals += [str(sp.get(k,"")) for k in ("human_name","machine_name")]
-        vals += [str(d.get("platform","")) for d in sp.get("downloads") or []]
-    t=" ".join(vals).lower()
-    if any(x in t for x in ("ebook","book bundle","books bundle")): return "Books"
-    if any(x in t for x in ("audio","music bundle")): return "Audio"
-    if "software" in t: return "Software"
-    if any(x in t for x in ("windows","linux","mac","android")): return "Games & Software"
-    return "Other"
+from library_paths import safe,title,year,category,relative_archive_path
 
 def image_for(sp):
     for k in ("icon","image","logo","thumbnail"):
@@ -52,7 +29,7 @@ def build(details, archive_root):
                     u=(d.get("url") or {}).get("web")
                     if not u: continue
                     fn=Path(unquote(urlparse(u).path)).name or "download"
-                    local=Path(safe(category(o),36))/safe(year(o),20)/safe(title(o),58)/safe(pn,58)/safe(str(platform),28)/safe(fn,90)
+                    local=relative_archive_path(o,{"product":pn,"platform":platform,"filename":fn})
                     fs.append({
                         "format":d.get("name") or Path(fn).suffix.lstrip(".") or "file",
                         "platform":platform,"filename":fn,"size_bytes":d.get("file_size"),
@@ -73,7 +50,7 @@ def build(details, archive_root):
       "purchases":purchases
     }
 
-CSS="""body{font:15px system-ui;margin:0;background:#0b1020;color:#eef3ff}main{max-width:1180px;margin:auto;padding:28px}a{color:#82d8ff}.card{background:#151d33;border:1px solid #2d395b;border-radius:15px;padding:16px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}.muted{color:#9ba8c8}.badge{background:#293653;border-radius:20px;padding:4px 8px;font-size:12px}input,select{background:#0b1327;color:#fff;border:1px solid #394566;border-radius:9px;padding:10px}.files{width:100%;border-collapse:collapse}.files td,.files th{text-align:left;border-bottom:1px solid #29334e;padding:8px}.cover{max-width:120px;max-height:150px;border-radius:8px}"""
+CSS="""footer{margin-top:30px;padding:20px 0;color:#9ba8c8;border-top:1px solid #29334e;font-size:13px}footer a{color:#b7c8ff}body{font:15px system-ui;margin:0;background:#0b1020;color:#eef3ff}main{max-width:1180px;margin:auto;padding:28px}a{color:#82d8ff}.card{background:#151d33;border:1px solid #2d395b;border-radius:15px;padding:16px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}.muted{color:#9ba8c8}.badge{background:#293653;border-radius:20px;padding:4px 8px;font-size:12px}input,select{background:#0b1327;color:#fff;border:1px solid #394566;border-radius:9px;padding:10px}.files{width:100%;border-collapse:collapse}.files td,.files th{text-align:left;border-bottom:1px solid #29334e;padding:8px}.cover{max-width:120px;max-height:150px;border-radius:8px}"""
 
 def export_catalogue(details, archive_root):
     root=Path(archive_root); cat=root/"catalogue"; pages=cat/"purchases"; assets=cat/"assets"
@@ -95,9 +72,9 @@ def export_catalogue(details, archive_root):
                 link=f"<a href='../../{quote(f['local_path'])}'>Open local</a>" if f["downloaded"] else ""
                 rows.append(f"<tr><td>{html.escape(str(f['platform']))}</td><td>{html.escape(str(f['format']))}</td><td>{html.escape(f['filename'])}</td><td>{html.escape(str(f.get('human_size') or f.get('size_bytes') or ''))}</td><td>{'Downloaded' if f['downloaded'] else 'Not downloaded'}</td><td>{link}</td></tr>")
             blocks.append(f"<section class='card'>{img}<h2>{html.escape(prod['title'])}</h2><table class='files'><tr><th>Platform</th><th>Type</th><th>File</th><th>Size</th><th>Status</th><th>Link</th></tr>{''.join(rows)}</table></section>")
-        page=f"<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='../assets/catalogue.css'><main><p><a href='../../index.html'>← Library</a></p><h1>{html.escape(p['title'])}</h1><p class='muted'>Purchased: {html.escape(str(p['purchase_date'] or ''))} · Category: {html.escape(p['category'])}</p>{''.join(blocks)}</main>"
+        page=f"<!doctype html><meta charset='utf-8'><link rel='stylesheet' href='../assets/catalogue.css'><main><p><a href='../../index.html'>← Library</a></p><h1>{html.escape(p['title'])}</h1><p class='muted'>Purchased: {html.escape(str(p['purchase_date'] or ''))} · Category: {html.escape(p['category'])}</p>{''.join(blocks)}<footer>Humble Library Manager v2.1.3 · Originally created by Arun Sutharshan · <a href='https://www.sutharshan.co.uk'>sutharshan.co.uk</a> · Community Open-Source Project · MIT License<br>Independent project — not affiliated with or endorsed by Humble Bundle.</footer></main>" 
         (pages/f"{slug}.html").write_text(page,encoding="utf-8")
     cats="".join(f"<option>{html.escape(x)}</option>" for x in sorted(set(p["category"] for p in model["purchases"])))
-    idx=f"""<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Humble Library Catalogue</title><link rel='stylesheet' href='catalogue/assets/catalogue.css'><main><h1>Humble Library Catalogue</h1><p class='muted'>{model['statistics']['purchases']} purchases · {model['statistics']['products']} products · {model['statistics']['files']} files</p><input id='q' placeholder='Search purchases…'> <select id='cat'><option value=''>All categories</option>{cats}</select><div class='grid'>{''.join(cards)}</div><script>const q=document.querySelector('#q'),c=document.querySelector('#cat');function f(){{document.querySelectorAll('.item').forEach(x=>x.style.display=(!q.value||x.dataset.title.includes(q.value.toLowerCase()))&&(!c.value||x.dataset.cat===c.value)?'block':'none')}}q.oninput=f;c.onchange=f;</script></main>"""
+    idx=f"""<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Humble Library Catalogue</title><link rel='stylesheet' href='catalogue/assets/catalogue.css'><main><h1>Humble Library Catalogue</h1><p class='muted'>{model['statistics']['purchases']} purchases · {model['statistics']['products']} products · {model['statistics']['files']} files</p><input id='q' placeholder='Search purchases…'> <select id='cat'><option value=''>All categories</option>{cats}</select><div class='grid'>{''.join(cards)}</div><script>const q=document.querySelector('#q'),c=document.querySelector('#cat');function f(){{document.querySelectorAll('.item').forEach(x=>x.style.display=(!q.value||x.dataset.title.includes(q.value.toLowerCase()))&&(!c.value||x.dataset.cat===c.value)?'block':'none')}}q.oninput=f;c.onchange=f;</script><footer>Humble Library Manager v2.1.3 · Originally created by Arun Sutharshan · <a href='https://www.sutharshan.co.uk'>sutharshan.co.uk</a> · Community Open-Source Project · MIT License<br>Independent project — not affiliated with or endorsed by Humble Bundle.</footer></main>"""
     (root/"index.html").write_text(idx,encoding="utf-8")
     return model

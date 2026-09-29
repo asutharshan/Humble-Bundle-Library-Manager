@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.1.3] - 2026-09-29
+
+### Added
+- In-app Chrome/Edge/Firefox guide for copying `_simpleauth_sess`.
+- Custom Humble Library Manager browser favicon.
+- Credits/About footer and creator/community attribution.
+- Persistent download-session metadata and Resume Previous Download control.
+- Windows system-sleep prevention while a download worker is active.
+
+### Fixed
+- Catalogue export `safe() takes 1 positional argument but 2 were given`.
+- Downloader and catalogue now share the same path-sanitising functions.
+- File checkbox choices remain visually consistent after re-rendering.
+
+### Notes
+- Display-off and Windows lock are still allowed while downloads run.
+- Normal Windows sleep behaviour is restored when the download job ends.
+
+
 ## [2.1.2] - 2026-09-29
 
 ### Added
