@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.2] - 2026-09-29
+
+### Added
+- `1 of N` progress numbering in download logs/current-file status.
+- Rotational retry queue for genuine transfer/filesystem failures.
+- Up to five total attempts per failed file with increasing delay between rounds.
+- Final run summary including verified, checksum-mismatch, skipped and failed counts.
+
+### Changed
+- Successfully transferred checksum-mismatch files are retained rather than discarded.
+- Checksum mismatch logs record both expected and locally calculated hashes.
+- Checksum mismatches do not enter the five-attempt retry queue.
+
+
 ## [2.1.1] - 2026-09-29
 
 ### Fixed

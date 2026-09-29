@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 import hashlib,json,os,re,threading,uuid
 from concurrent.futures import ThreadPoolExecutor,as_completed
 from datetime import datetime
@@ -118,7 +119,7 @@ def catalogue_export():
 def start():
  b=request.json or {};dest=(b.get("destination") or "").strip()
  if not dest:return jsonify(error="Enter a download folder."),400
- jid=str(uuid.uuid4());STATE["jobs"][jid]={"status":"queued","total":0,"done":0,"downloaded":0,"skipped":0,"failed":0,"bytes_done":0,"current":"","logs":[],"cancel":False,"destination":dest}
+ jid=str(uuid.uuid4());STATE["jobs"][jid]={"status":"queued","total":0,"done":0,"downloaded":0,"verified":0,"checksum_mismatch":0,"skipped":0,"failed":0,"retrying":0,"bytes_done":0,"current":"","logs":[],"cancel":False,"destination":dest}
  threading.Thread(target=run,args=(jid,b.get("keys") or [],b.get("file_ids") or {}),daemon=True).start();return jsonify(job_id=jid)
 def log(j,m,l="info"):
  with LOCK:j["logs"].append({"time":datetime.now().strftime("%H:%M:%S"),"level":l,"message":m});j["logs"]=j["logs"][-500:]
@@ -138,30 +139,69 @@ def run(jid,keys,picks):
    tasks.append((o,f))
  j["total"]=len(tasks);log(j,f"Queue contains {len(tasks)} files.")
  root=Path(j["destination"]).expanduser()
- for o,f in tasks:
-  if j["cancel"]:break
-  try:
-   dest=archive_path(root,o,f);dest.parent.mkdir(parents=True,exist_ok=True);j["current"]=f'{f["product"]} - {f["filename"]}'
-  except Exception as e:
-   j["failed"]+=1;j["done"]+=1;log(j,f'PATH ERROR {f["filename"]}: {e}');continue
-  try:
-   sz=f.get("size")
-   if dest.exists() and ((sz and dest.stat().st_size==int(sz)) or not sz):j["skipped"]+=1;j["done"]+=1;log(j,"Skipped existing: "+dest.name,"skip");continue
-   part=Path(str(dest)+".part");pos=part.stat().st_size if part.exists() else 0;headers={"Range":f"bytes={pos}-"} if pos else {}
-   r=session().get(f["url"],stream=True,timeout=90,headers=headers)
-   if pos and r.status_code!=206:r.close();part.unlink(missing_ok=True);pos=0;r=session().get(f["url"],stream=True,timeout=90)
-   r.raise_for_status()
-   with part.open("ab" if pos else "wb") as fh:
-    for chunk in r.iter_content(1048576):
-     if j["cancel"]:break
-     if chunk:fh.write(chunk);j["bytes_done"]+=len(chunk)
-   r.close()
+ pending=[(o,f,1) for o,f in tasks]
+ final_done=0
+ max_attempts=5
+ while pending and not j["cancel"]:
+  current=pending;pending=[]
+  round_no=current[0][2] if current else 1
+  if round_no>1:
+   j["retrying"]=len(current)
+   log(j,f"Retry round {round_no}/{max_attempts} — {len(current)} file(s).")
+   time.sleep(min(2*(round_no-1),8))
+  for o,f,attempt in current:
    if j["cancel"]:break
-   chk,alg=(f.get("sha1"),"sha1") if f.get("sha1") else ((f.get("md5"),"md5") if f.get("md5") else (None,None))
-   if chk and digest(part,alg).lower()!=str(chk).lower():raise RuntimeError(alg.upper()+" checksum mismatch")
-   os.replace(part,dest);j["downloaded"]+=1;j["done"]+=1;log(j,"Downloaded: "+f["product"]+" / "+f["filename"],"ok")
-  except Exception as e:j["failed"]+=1;j["done"]+=1;log(j,"FAILED: "+f["filename"]+" — "+str(e),"error")
- j["current"]="";j["status"]="cancelled" if j["cancel"] else "completed";lib=root/"_library";lib.mkdir(parents=True,exist_ok=True);(lib/"latest_download.json").write_text(json.dumps({k:v for k,v in j.items() if k not in ("logs","cancel")},indent=2),encoding="utf-8");log(j,"Download run "+j["status"]+".")
+   prefix=f"[{final_done+1} of {j['total']}]"
+   if attempt>1: prefix+=f" [Attempt {attempt}/{max_attempts}]"
+   try:
+    dest=archive_path(root,o,f);dest.parent.mkdir(parents=True,exist_ok=True);j["current"]=f'{final_done+1} of {j["total"]}: {f["product"]} - {f["filename"]}'
+   except Exception as e:
+    if attempt<max_attempts:
+     pending.append((o,f,attempt+1));log(j,f"{prefix} PATH ERROR — queued for retry: {f['filename']} — {e}","error")
+    else:
+     j["failed"]+=1;j["done"]+=1;final_done+=1;log(j,f"{prefix} FAILED after {max_attempts} attempts: {f['filename']} — {e}","error")
+    continue
+   try:
+    sz=f.get("size")
+    if dest.exists() and ((sz and dest.stat().st_size==int(sz)) or not sz):
+     j["skipped"]+=1;j["done"]+=1;final_done+=1;log(j,f"{prefix} Skipped existing: {dest.name}","skip");continue
+    part=Path(str(dest)+".part");pos=part.stat().st_size if part.exists() else 0;headers={"Range":f"bytes={pos}-"} if pos else {}
+    r=session().get(f["url"],stream=True,timeout=90,headers=headers)
+    if pos and r.status_code!=206:
+     r.close();part.unlink(missing_ok=True);pos=0;r=session().get(f["url"],stream=True,timeout=90)
+    r.raise_for_status()
+    with part.open("ab" if pos else "wb") as fh:
+     for chunk in r.iter_content(1048576):
+      if j["cancel"]:break
+      if chunk:fh.write(chunk);j["bytes_done"]+=len(chunk)
+    r.close()
+    if j["cancel"]:break
+    chk,alg=(f.get("sha1"),"sha1") if f.get("sha1") else ((f.get("md5"),"md5") if f.get("md5") else (None,None))
+    actual=digest(part,alg).lower() if chk else None
+    mismatch=bool(chk and actual!=str(chk).lower())
+    os.replace(part,dest)
+    j["downloaded"]+=1;j["done"]+=1;final_done+=1
+    if mismatch:
+     j["checksum_mismatch"]+=1
+     log(j,f"{prefix} Downloaded — CHECKSUM MISMATCH: {f['product']} / {f['filename']} | expected {alg.upper()}={chk} | actual={actual}","warn")
+    else:
+     if chk:j["verified"]+=1
+     log(j,f"{prefix} Downloaded: {f['product']} / {f['filename']}","ok")
+   except Exception as e:
+    # Genuine transfer/filesystem failures rotate to the end of the retry queue.
+    if attempt<max_attempts:
+     pending.append((o,f,attempt+1));log(j,f"{prefix} FAILED — queued for retry: {f['filename']} — {e}","error")
+    else:
+     j["failed"]+=1;j["done"]+=1;final_done+=1;log(j,f"{prefix} FAILED after {max_attempts} attempts: {f['filename']} — {e}","error")
+  j["retrying"]=len(pending)
+ j["current"]="";j["retrying"]=0;j["status"]="cancelled" if j["cancel"] else "completed"
+ lib=root/"_library";lib.mkdir(parents=True,exist_ok=True)
+ summary={k:v for k,v in j.items() if k not in ("logs","cancel")}
+ (lib/"latest_download.json").write_text(json.dumps(summary,indent=2),encoding="utf-8")
+ if not j["cancel"]:
+  log(j,f"Completed: {j['downloaded']} downloaded ({j['verified']} checksum verified, {j['checksum_mismatch']} checksum mismatch), {j['skipped']} skipped, {j['failed']} failed after retries.")
+ else:log(j,"Download run cancelled.")
+
 @app.get("/api/job/<jid>")
 def job(jid):
  j=STATE["jobs"].get(jid)

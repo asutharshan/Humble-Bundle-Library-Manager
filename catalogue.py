@@ -6,7 +6,7 @@ from urllib.parse import urlparse, unquote, quote
 import yaml
 
 SCHEMA_VERSION="1.0"
-VERSION="2.1.1"
+VERSION="2.1.2"
 
 def safe(s):
     s=re.sub(r'[<>:"/\\|?*\x00-\x1f]',"_",(s or "Unknown").strip())
