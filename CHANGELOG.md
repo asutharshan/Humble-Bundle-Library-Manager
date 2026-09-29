@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.1.6] - 2026-09-29
+
+### Fixed
+- Fixed `old` local-variable error when updating the catalogue from Humble.
+- Audit, download selection and catalogue repair now share the same reconciled local-file state.
+- Existing files under shortened Windows-safe paths are no longer classified as missing solely because a reconstructed path differs.
+- Download New / Missing excludes reconciled existing files from the queue.
+- Post-download audit and catalogue regeneration added.
+- Cancel control is hidden when a job completes.
+- Library file-count labels now use the same recognised-file inventory.
+
+### Added
+- Native local folder picker returning the full filesystem path.
+- Persistent `_library/reconciled_state.json`.
+- Compact catalogue list with 25/50/100 pagination.
+- Search across purchase, product/book and filename metadata.
+- Complete/Partial/Missing/No-files filters.
+- Compact purchase pages with file-format markers and sizes.
+- Small year/version/legal footer.
+- In-app security warning.
+- Stronger Disclaimer and Security guidance, including antivirus scanning guidance.
+
+### Safety
+- Existing library reconciliation does not reorganise or delete the library.
+- Ambiguous local-file matches are not guessed.
+- Downloaded programs/installers are never automatically executed by the application.
+
+
 ## [2.1.5] - 2026-09-29
 
 ### Added

@@ -10,10 +10,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from catalogue import export_catalogue, reconcile_catalogue, render_existing_catalogue
 from library_audit import audit_library, apply_audit
+from library_state import reconcile as reconcile_local, persist as persist_local
 from library_paths import title, year, category, archive_path
 
 app=Flask(__name__)
-BASE="https://www.humblebundle.com"; VERSION="2.1.5"
+BASE="https://www.humblebundle.com"; VERSION="2.1.6"
 STATE={"cookie":None,"orders":[],"details":{},"jobs":{}}
 LOCK=threading.Lock()
 
@@ -116,6 +117,19 @@ def load():
     d.sort(key=lambda x:str(x["created"] or ""),reverse=True)
     return jsonify(orders=d,errors=errors)
 
+
+@app.post("/api/choose-folder")
+def choose_folder():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        top=tk.Tk();top.withdraw();top.attributes("-topmost",True)
+        initial=(request.json or {}).get("initial") or str(Path.cwd())
+        p=filedialog.askdirectory(initialdir=str(Path(initial).expanduser()) if Path(initial).expanduser().exists() else str(Path.cwd()),title="Select Humble Library folder")
+        top.destroy()
+        return jsonify(path=p or "")
+    except Exception as e:return jsonify(error=f"Folder picker unavailable: {e}"),500
+
 @app.post("/api/library-info")
 def library_info():
     b=request.json or {};dest=(b.get("destination") or "").strip()
@@ -125,9 +139,10 @@ def library_info():
     old={}
     try:old=json.loads(cat.read_text(encoding="utf-8")) if cat.exists() else {}
     except Exception:old={}
-    disk=sum(1 for p in root.rglob("*") if p.is_file() and "_library" not in p.parts and "catalogue" not in p.parts) if root.exists() else 0
+    state=reconcile_local(root) if root.exists() else {"summary":{"files_on_disk":0,"matched":0,"missing":0,"partial":0}}
     oldfiles=(old.get("statistics") or {}).get("files",0)
-    return jsonify(exists=root.exists(),catalogue=cat.exists(),catalogued_files=oldfiles,disk_files=disk)
+    s=state["summary"]
+    return jsonify(exists=root.exists(),catalogue=cat.exists(),catalogued_files=oldfiles,disk_files=s["files_on_disk"],matched=s["matched"],missing=s["missing"],partial=s["partial"])
 
 @app.post("/api/audit")
 def local_audit():
@@ -220,7 +235,19 @@ def run(jid,keys,picks):
             for f in files(o):
                 if chosen is not None and f["id"] not in chosen:continue
                 tasks.append((len(tasks)+1,o,f))
-        j["total"]=len(tasks);log(j,f"Queue contains {len(tasks)} files across {len(set(o.get('gamekey') for _,o,_ in tasks))} purchase(s).")
+        # Reconcile the existing catalogue against the actual filesystem first.
+        # Only known missing/partial records are queued when the catalogue can identify them.
+        state=reconcile_local(root);persist_local(root,state)
+        if state.get("summary",{}).get("known"):
+            missing_keys={str(x.get("purchase_id"))+"|"+str(x.get("file_id")) for x in state.get("missing",[])}
+            filtered=[]
+            for _,o,f in tasks:
+                k=str(o.get("gamekey"))+"|"+str(f.get("id"))
+                if k in missing_keys: filtered.append((len(filtered)+1,o,f))
+            existing_count=len(tasks)-len(filtered);tasks=filtered
+            log(j,f"Reconciled library: {state['summary']['matched']} matched, {state['summary']['missing']} missing, {state['summary']['partial']} partial, {state['summary']['unmapped']} unmapped.")
+            if existing_count:log(j,f"{existing_count} selected file(s) already exist and were excluded from the download queue.")
+        j["total"]=len(tasks);log(j,f"Download queue contains {len(tasks)} genuinely missing file(s).")
         atomic_json(queue_file(root),{"version":VERSION,"status":"running","total":len(tasks),"keys":keys,"file_ids":picks,"completed_ids":[]})
         pending=[(idx,o,f,1) for idx,o,f in tasks];completed=[]
         max_attempts=5
@@ -299,7 +326,11 @@ def run(jid,keys,picks):
         summary={k:v for k,v in j.items() if k not in ("logs","cancel")}
         atomic_json(lib/"latest_download.json",summary)
         if not j["cancel"]:
-            log(j,f"Completed: {j['done']} of {j['total']} files processed; {j['downloaded']} downloaded ({j['verified']} verified, {j['checksum_mismatch']} checksum mismatch retained), {j['skipped']} already present, {j['failed']} failed.")
+            log(j,f"Completed: {j['done']} of {j['total']} queued files processed; {j['downloaded']} downloaded ({j['verified']} verified, {j['checksum_mismatch']} checksum mismatch retained), {j['failed']} failed.")
+            try:
+                audit=audit_library(root);apply_audit(root,audit);render_existing_catalogue(root)
+                log(j,f"Post-download audit: {audit['summary']['matched']} matched, {audit['summary']['missing']} missing, {audit['summary']['partial']} partial. Catalogue regenerated.","ok")
+            except Exception as e:log(j,f"Post-download catalogue refresh warning: {e}","warn")
         else:log(j,"Download run cancelled. Partial files and session state were retained.")
     finally:
         prevent_sleep(False)

@@ -2,3 +2,6 @@
 .filemeter{margin-top:8px;height:11px}#libraryInfo{margin-top:10px;padding:8px 0}
 
 .auditbox{margin:12px 0;padding:12px 14px;border:1px solid #394b74;border-radius:10px;background:#111a30;line-height:1.55}
+
+.securitynote{font-size:12px;color:#aab5cd;margin:8px 0 14px}.securitynote b{color:#ffcf70}
+footer{font-size:10px!important;line-height:1.4}

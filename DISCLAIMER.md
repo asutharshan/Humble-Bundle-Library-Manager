@@ -1,9 +1,11 @@
 # Disclaimer
 
-Humble Library Manager is an independent, unofficial open-source community project originally created by Arun Sutharshan. It is not affiliated with, endorsed by, sponsored by, or associated with Humble Bundle, Inc. Product names, marks and logos belong to their respective owners.
+Humble Library Manager is an independent community open-source project and is not affiliated with, sponsored by, or endorsed by Humble Bundle.
 
-The software is provided **as-is**, without warranty, and is used entirely at the user's own risk. To the fullest extent permitted by applicable law, the original creator, maintainers and contributors accept no responsibility or liability for data loss, incomplete or corrupted downloads, account issues, loss of access, service interruption, security incidents, financial loss, indirect loss, or other damage arising from use or misuse.
+The software is provided under the MIT License **as is**, without warranty of any kind. Use it entirely at your own risk. To the maximum extent permitted by applicable law, the original creator, maintainers and contributors accept no liability for loss, damage, data loss, account issues, service interruption, security incidents, malware, corrupted files, third-party content, or other consequences arising from use of the software.
 
-Users are responsible for complying with applicable law and current service terms; accessing only content they are legitimately entitled to access; protecting authentication credentials; and maintaining independent backups.
+Users are responsible for their own backups, account/session security, compliance with applicable law and third-party terms, and determining whether they are entitled to download, retain, convert or use content.
 
-This project does not bypass DRM or access controls. Interfaces used by the project may change without notice.
+Downloaded files originate from third-party services/content providers. Always scan downloaded files with reputable, up-to-date antivirus/security software before opening, extracting, installing or executing them. Exercise particular care with executable files, installers, scripts and archives.
+
+The project does not bypass DRM or access controls.
