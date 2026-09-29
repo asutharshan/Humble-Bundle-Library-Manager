@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.1.5] - 2026-09-29
+
+### Added
+- Local-only Scan Existing Library.
+- Local-only Repair / Update Catalogue for libraries created by earlier releases.
+- Audit counts for matched, missing, unmapped, ambiguous, partial and zero-file purchases.
+- Conservative recovery of stale catalogue links using existing files.
+- Search across purchases, product/book titles and filenames.
+- Complete, Partial, Missing locally and No files discovered catalogue filters.
+- Up to four available product images per catalogue card with a built-in generic book cover fallback.
+- Explicit messages on empty purchase/product pages.
+- `_library/catalogue_audit.json` audit record.
+
+### Changed
+- Existing audited paths are preferred during later catalogue reconciliation.
+- Local catalogue repair is separate from Humble metadata refresh and download actions.
+
+### Safety
+- Local repair does not download, move or delete ebook files.
+- Ambiguous matches are reported rather than automatically linked.
+
+
 ## [2.1.4] - 2026-09-29
 
 ### Added

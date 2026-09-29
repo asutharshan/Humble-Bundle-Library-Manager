@@ -8,11 +8,12 @@ import requests
 from flask import Flask, jsonify, render_template, request
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from catalogue import export_catalogue, reconcile_catalogue
+from catalogue import export_catalogue, reconcile_catalogue, render_existing_catalogue
+from library_audit import audit_library, apply_audit
 from library_paths import title, year, category, archive_path
 
 app=Flask(__name__)
-BASE="https://www.humblebundle.com"; VERSION="2.1.4"
+BASE="https://www.humblebundle.com"; VERSION="2.1.5"
 STATE={"cookie":None,"orders":[],"details":{},"jobs":{}}
 LOCK=threading.Lock()
 
@@ -127,6 +128,23 @@ def library_info():
     disk=sum(1 for p in root.rglob("*") if p.is_file() and "_library" not in p.parts and "catalogue" not in p.parts) if root.exists() else 0
     oldfiles=(old.get("statistics") or {}).get("files",0)
     return jsonify(exists=root.exists(),catalogue=cat.exists(),catalogued_files=oldfiles,disk_files=disk)
+
+@app.post("/api/audit")
+def local_audit():
+    b=request.json or {};dest=(b.get("destination") or "").strip()
+    if not dest:return jsonify(error="Enter an existing library folder."),400
+    try:
+        x=audit_library(dest);atomic_json(Path(dest).expanduser()/"_library"/"catalogue_audit.json",x);return jsonify(ok=True,audit=x)
+    except Exception as e:return jsonify(error=str(e)),500
+
+@app.post("/api/repair-catalogue")
+def repair_catalogue():
+    b=request.json or {};dest=(b.get("destination") or "").strip()
+    if not dest:return jsonify(error="Enter an existing library folder."),400
+    try:
+        x=audit_library(dest);n=apply_audit(dest,x);m=render_existing_catalogue(dest)
+        return jsonify(ok=True,audit=x,updated_paths=n,statistics=m.get("statistics",{}))
+    except Exception as e:return jsonify(error=str(e)),500
 
 @app.post("/api/catalogue")
 def catalogue_export():
