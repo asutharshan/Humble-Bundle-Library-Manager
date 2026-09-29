@@ -13,8 +13,27 @@ from catalogue import export_catalogue
 app=Flask(__name__); BASE="https://www.humblebundle.com"
 STATE={"cookie":None,"orders":[],"details":{},"jobs":{}}; LOCK=threading.Lock()
 BAD=re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-def safe(s,n=160):
- s=BAD.sub("_",(s or "Unknown").strip()); s=re.sub(r"\s+"," ",s).strip(" .") or "Unknown"; return s[:n].rstrip(" .")
+def safe(s,n=80):
+ s=re.sub(r'[<>:"/\\|?*\x00-\x1f]',"_",(s or "Unknown").strip())
+ s=re.sub(r"\s+"," ",s).strip(" .") or "Unknown"
+ if len(s)<=n:return s
+ digest=hashlib.sha1(s.encode("utf-8")).hexdigest()[:8]
+ keep=max(12,n-len(digest)-3)
+ return s[:keep].rstrip(" ._-")+"__"+digest
+
+def archive_path(root,o,f,max_total=235):
+ parts=[safe(category(o),36),safe(year(o),20),safe(title(o),58),safe(f["product"],58),safe(str(f["platform"]),28),safe(f["filename"],90)]
+ dest=Path(root).joinpath(*parts)
+ try: total=len(str(dest.resolve()))
+ except Exception: total=len(str(dest.absolute()))
+ if total>max_total:
+  over=total-max_total
+  for idx,min_len in ((3,28),(2,28),(5,45),(0,20),(4,16)):
+   if over<=0:break
+   cur=parts[idx]; target=max(min_len,len(cur)-over); short=safe(cur,target)
+   over-=max(0,len(cur)-len(short));parts[idx]=short
+  dest=Path(root).joinpath(*parts)
+ return dest
 def session():
  s=requests.Session(); s.headers.update({"User-Agent":"HumbleLibraryManager/2.0","Referer":BASE+"/home/library"})
  if STATE["cookie"]: s.cookies.set("_simpleauth_sess",STATE["cookie"],domain=".humblebundle.com")
@@ -121,7 +140,10 @@ def run(jid,keys,picks):
  root=Path(j["destination"]).expanduser()
  for o,f in tasks:
   if j["cancel"]:break
-  dest=root/safe(category(o))/safe(year(o))/safe(title(o))/safe(f["product"])/safe(str(f["platform"]))/safe(f["filename"],190);dest.parent.mkdir(parents=True,exist_ok=True);j["current"]=f'{f["product"]} — {f["filename"]}'
+  try:
+   dest=archive_path(root,o,f);dest.parent.mkdir(parents=True,exist_ok=True);j["current"]=f'{f["product"]} - {f["filename"]}'
+  except Exception as e:
+   j["failed"]+=1;j["done"]+=1;log(j,f'PATH ERROR {f["filename"]}: {e}');continue
   try:
    sz=f.get("size")
    if dest.exists() and ((sz and dest.stat().st_size==int(sz)) or not sz):j["skipped"]+=1;j["done"]+=1;log(j,"Skipped existing: "+dest.name,"skip");continue

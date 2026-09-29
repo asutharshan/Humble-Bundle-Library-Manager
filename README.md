@@ -2,7 +2,7 @@
 
 **Browse, catalogue and back up downloadable content from your own Humble library.**
 
-**Version 2.1.0 · 29 September 2026**
+**Version 2.1.1 · 29 September 2026**
 
 Originally created by **Arun Sutharshan**  
 Website: https://www.sutharshan.co.uk  
@@ -80,3 +80,8 @@ Released under the **MIT License**. See `LICENSE`.
 This is unofficial software using interfaces that may change without notice. It does not bypass DRM or access controls and is intended only for content the user is legitimately entitled to access.
 
 The software is provided **as-is and without warranty**. Use it at your own risk. See `DISCLAIMER.md`.
+
+
+## Windows path handling
+
+Version 2.1.1 shortens long generated archive path components using deterministic hashes. Full Humble names remain in catalogue metadata. A path creation failure is logged against that file rather than stopping the complete download job.

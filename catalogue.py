@@ -6,7 +6,7 @@ from urllib.parse import urlparse, unquote, quote
 import yaml
 
 SCHEMA_VERSION="1.0"
-VERSION="2.1.0"
+VERSION="2.1.1"
 
 def safe(s):
     s=re.sub(r'[<>:"/\\|?*\x00-\x1f]',"_",(s or "Unknown").strip())
@@ -52,7 +52,7 @@ def build(details, archive_root):
                     u=(d.get("url") or {}).get("web")
                     if not u: continue
                     fn=Path(unquote(urlparse(u).path)).name or "download"
-                    local=Path(category(o))/safe(year(o))/safe(title(o))/safe(pn)/safe(str(platform))/safe(fn)
+                    local=Path(safe(category(o),36))/safe(year(o),20)/safe(title(o),58)/safe(pn,58)/safe(str(platform),28)/safe(fn,90)
                     fs.append({
                         "format":d.get("name") or Path(fn).suffix.lstrip(".") or "file",
                         "platform":platform,"filename":fn,"size_bytes":d.get("file_size"),

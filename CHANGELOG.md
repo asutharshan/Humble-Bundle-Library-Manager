@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.1] - 2026-09-29
+
+### Fixed
+- Windows `WinError 206` failures from long nested archive paths.
+- Long path components now use deterministic shortening with hashes.
+- Individual path creation errors no longer terminate the whole download worker.
+- Catalogue local paths follow the shortened archive naming convention.
+
+
 ## [2.1.0] - 2026-09-29
 
 ### Added
