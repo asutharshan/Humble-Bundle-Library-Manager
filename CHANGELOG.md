@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.2.0] - 2026-09-30
+
+### Major library-state update
+- Added a persistent `_library/record_registry.json` keyed by Humble purchase/file record.
+- A file positively found by the downloader is now authoritative and its exact physical path is persisted.
+- Existing v2.1.x libraries are upgraded in place from file status, reconciled state, catalogue paths and a fresh local scan.
+- Repair/Scan consult the persistent registry before path reconstruction, preventing confirmed files from reverting to `missing`.
+- Physical scanning inventories all ordinary library payload files regardless of extension; HLM catalogue/internal files are excluded.
+- Headline audit figures now distinguish Humble records, confirmed-local records, genuinely missing records, ambiguous records and physical payload files.
+
+### Humble metadata
+- Added a shared tolerant Humble metadata parser used by both the live purchase UI and catalogue generation.
+- Parser discovers `download_struct` groups nested below subproducts rather than assuming one fixed metadata layout.
+- Zero-file purchases are explicitly flagged as **Needs investigation**.
+- Added purchase diagnostics: subproduct count, download-group count, download-entry count, web-URL count and parser result.
+- Catalogue purchase pages include zero-file diagnostics instead of silently showing an empty page.
+
+### Downloading and UI
+- Existing-file and newly-downloaded paths are written immediately to the record registry.
+- Checksum-mismatch files already retained locally remain present and are not re-downloaded solely because of the mismatch.
+- Completed jobs no longer leave the current-file progress display at 0%.
+- Existing-library summary uses record-level completeness instead of implying raw filesystem counts equal Humble record counts.
+
+### Upgrade
+Point v2.2.0 at the existing HumbleLibrary folder. Run **Scan Existing Library**, then **Repair / Update Catalogue (Local Only)**. No library payload files are moved or deleted by the migration.
+
+
+## [2.1.6.1] - 2026-09-29
+
+### Hotfix
+- Fixed the remaining `old` unbound-local error in **Update Catalogue from Humble**.
+- Humble catalogue reconciliation now prefers a path already confirmed by the local reconciled state.
+- Existing-library inventory now counts **all ordinary library files**, regardless of extension, instead of using an ebook/software extension allow-list.
+- HLM internal `_library`, `catalogue`, Git and cache files remain excluded.
+- This prevents valid Humble software/assets with uncommon extensions from being incorrectly reported as missing.
+
+### Important
+After upgrading from v2.1.6, run **Scan Existing Library** again before using **Download New / Missing Selected**. The previous 1,514/311 audit was produced by the faulty extension-filtered scanner and should not be used as a download decision.
+
+
 ## [2.1.6] - 2026-09-29
 
 ### Fixed

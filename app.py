@@ -12,9 +12,11 @@ from catalogue import export_catalogue, reconcile_catalogue, render_existing_cat
 from library_audit import audit_library, apply_audit
 from library_state import reconcile as reconcile_local, persist as persist_local
 from library_paths import title, year, category, archive_path
+from humble_parser import parse_order_files, order_diagnostics
+from record_registry import confirm as registry_confirm, bootstrap as registry_bootstrap
 
 app=Flask(__name__)
-BASE="https://www.humblebundle.com"; VERSION="2.1.6"
+BASE="https://www.humblebundle.com"; VERSION="2.2.0"
 STATE={"cookie":None,"orders":[],"details":{},"jobs":{}}
 LOCK=threading.Lock()
 
@@ -39,26 +41,13 @@ def getj(url):
     r.raise_for_status(); return r.json()
 
 def files(o):
-    out=[]
-    for pi,sp in enumerate(o.get("subproducts") or []):
-        pn=sp.get("human_name") or sp.get("machine_name") or f"Product {pi+1}"
-        for gi,g in enumerate(sp.get("downloads") or []):
-            platform=g.get("platform") or g.get("machine_name") or "Files"
-            for fi,d in enumerate(g.get("download_struct") or []):
-                u=(d.get("url") or {}).get("web")
-                if not u: continue
-                fn=Path(unquote(urlparse(u).path)).name or f"download_{fi+1}"
-                out.append({"id":f"{pi}:{gi}:{fi}","product":pn,"platform":platform,
-                    "format":d.get("name") or Path(fn).suffix.lstrip(".") or "file",
-                    "filename":fn,"url":u,"size":d.get("file_size"),"human_size":d.get("human_size"),
-                    "sha1":d.get("sha1"),"md5":d.get("md5")})
-    return out
+    return parse_order_files(o)
 
 def public(o):
     fs=files(o); ps={}
     for f in fs: ps.setdefault(f["product"],[]).append({k:v for k,v in f.items() if k!="url"})
     return {"gamekey":o["gamekey"],"title":title(o),"created":o.get("created"),"year":year(o),
-            "category":category(o),"file_count":len(fs),"products":ps}
+            "category":category(o),"file_count":len(fs),"products":ps,"diagnostics":order_diagnostics(o)}
 
 def queue_file(root): return Path(root).expanduser()/"_library"/"download_queue.json"
 def status_file(root): return Path(root).expanduser()/"_library"/"file_status.json"
@@ -142,7 +131,7 @@ def library_info():
     state=reconcile_local(root) if root.exists() else {"summary":{"files_on_disk":0,"matched":0,"missing":0,"partial":0}}
     oldfiles=(old.get("statistics") or {}).get("files",0)
     s=state["summary"]
-    return jsonify(exists=root.exists(),catalogue=cat.exists(),catalogued_files=oldfiles,disk_files=s["files_on_disk"],matched=s["matched"],missing=s["missing"],partial=s["partial"])
+    return jsonify(exists=root.exists(),catalogue=cat.exists(),catalogued_files=oldfiles,disk_files=s.get("physical_payload_files",s.get("files_on_disk",0)),matched=s["matched"],missing=s["missing"],partial=s["partial"])
 
 @app.post("/api/audit")
 def local_audit():
@@ -235,8 +224,8 @@ def run(jid,keys,picks):
             for f in files(o):
                 if chosen is not None and f["id"] not in chosen:continue
                 tasks.append((len(tasks)+1,o,f))
-        # Reconcile the existing catalogue against the actual filesystem first.
-        # Only known missing/partial records are queued when the catalogue can identify them.
+        # Upgrade prior metadata and reconcile against the actual filesystem.
+        registry_bootstrap(root)
         state=reconcile_local(root);persist_local(root,state)
         if state.get("summary",{}).get("known"):
             missing_keys={str(x.get("purchase_id"))+"|"+str(x.get("file_id")) for x in state.get("missing",[])}
@@ -271,11 +260,18 @@ def run(jid,keys,picks):
                     # A previously completed mismatch is accepted unless the file is now missing.
                     if dest.exists() and prior.get("status") in ("checksum_mismatch","verified","downloaded"):
                         j["skipped"]+=1;j["done"]+=1;completed.append(key)
+                        rel=str(dest.relative_to(root)).replace("\\","/")
+                        registry_confirm(root,key,rel,dest.stat().st_size,prior.get("status") or "present","downloader-existing",
+                                         {"purchase":purchase,"filename":f["filename"],"file_id":f["id"]})
                         log(j,f"{prefix} — already downloaded ({human_bytes(dest.stat().st_size)}), status: {prior.get('status')}.","skip");continue
                     if dest.exists() and ((sz and dest.stat().st_size==sz) or not sz):
                         j["skipped"]+=1;j["done"]+=1;completed.append(key)
-                        statuses[key]={"status":"downloaded","local_path":str(dest.relative_to(root)).replace("\\","/"),"size":dest.stat().st_size,"updated_at":datetime.now(timezone.utc).isoformat()}
-                        save_status(root,statuses);log(j,f"{prefix} — existing file found ({human_bytes(dest.stat().st_size)}).","skip");continue
+                        rel=str(dest.relative_to(root)).replace("\\","/")
+                        statuses[key]={"status":"downloaded","local_path":rel,"size":dest.stat().st_size,"updated_at":datetime.now(timezone.utc).isoformat()}
+                        save_status(root,statuses)
+                        registry_confirm(root,key,rel,dest.stat().st_size,"present","downloader-existing",
+                                         {"purchase":purchase,"filename":f["filename"],"file_id":f["id"]})
+                        log(j,f"{prefix} — existing file found ({human_bytes(dest.stat().st_size)}).","skip");continue
                     part=Path(str(dest)+".part");pos=part.stat().st_size if part.exists() else 0
                     headers={"Range":f"bytes={pos}-"} if pos else {}
                     r=session().get(f["url"],stream=True,timeout=90,headers=headers)
@@ -306,6 +302,9 @@ def run(jid,keys,picks):
                           "checksum_algorithm":alg,"expected_checksum":chk,"actual_checksum":actual,
                           "updated_at":datetime.now(timezone.utc).isoformat()}
                     statuses[key]=stat;save_status(root,statuses)
+                    registry_confirm(root,key,stat["local_path"],stat["size"],stat["status"],"downloader-download",
+                                     {"purchase":purchase,"filename":f["filename"],"file_id":f["id"],
+                                      "checksum_algorithm":alg,"expected_checksum":chk,"actual_checksum":actual})
                     if mismatch:
                         j["checksum_mismatch"]+=1
                         log(j,f"{prefix} — downloaded {human_bytes(dest.stat().st_size)} — CHECKSUM MISMATCH retained. Expected {alg.upper()}={chk}; actual={actual}.","warn")
@@ -319,7 +318,7 @@ def run(jid,keys,picks):
                         j["failed"]+=1;j["done"]+=1;completed.append(key);log(j,f"{prefix} — FAILED after {max_attempts} attempts: {e}","error")
                 atomic_json(queue_file(root),{"version":VERSION,"status":"running","total":j["total"],"keys":keys,"file_ids":picks,"completed_ids":completed})
             j["retrying"]=len(pending)
-        j["current"]="";j["current_purchase"]="";j["current_file"]="";j["current_size"]=0;j["current_bytes"]=0;j["current_percent"]=0
+        j["current"]="";j["current_purchase"]="";j["current_file"]="";j["current_size"]=0;j["current_bytes"]=0;j["current_percent"]=100 if j["total"] else 0
         j["retrying"]=0;j["status"]="cancelled" if j["cancel"] else "completed"
         atomic_json(queue_file(root),{"version":VERSION,"status":j["status"],"total":j["total"],"keys":keys,"file_ids":picks,"completed_ids":completed})
         lib=root/"_library";lib.mkdir(parents=True,exist_ok=True)

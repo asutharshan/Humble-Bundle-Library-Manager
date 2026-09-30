@@ -2,7 +2,7 @@
 
 **Browse, catalogue and back up downloadable content from your own Humble library.**
 
-**Version 2.1.6 · 29 September 2026**
+**Version 2.2.0 · 29 September 2026**
 
 Originally created by **Arun Sutharshan**  
 Website: https://www.sutharshan.co.uk  
@@ -84,37 +84,53 @@ The software is provided **as-is and without warranty**. Use it at your own risk
 
 ## Windows path handling
 
-Version 2.1.6 shortens long generated archive path components using deterministic hashes. Full Humble names remain in catalogue metadata. A path creation failure is logged against that file rather than stopping the complete download job.
+Version 2.2.0 shortens long generated archive path components using deterministic hashes. Full Humble names remain in catalogue metadata. A path creation failure is logged against that file rather than stopping the complete download job.
 
 ## Retry and checksum behaviour
 
-Version 2.1.6 numbers final file outcomes (`1 of N`, `2 of N`, etc.). Genuine HTTP/network/filesystem failures are placed at the end of a rotational retry queue for up to five total attempts per file. Checksum mismatches are not repeatedly downloaded: the completed file is retained and clearly flagged with the expected and calculated checksum.
+Version 2.2.0 numbers final file outcomes (`1 of N`, `2 of N`, etc.). Genuine HTTP/network/filesystem failures are placed at the end of a rotational retry queue for up to five total attempts per file. Checksum mismatches are not repeatedly downloaded: the completed file is retained and clearly flagged with the expected and calculated checksum.
 
 
-## v2.1.6 reliability and UI
+## v2.2.0 reliability and UI
 
 Adds a fixed catalogue exporter using shared path utilities, an in-app cookie help guide, custom favicon, credits footer, persistent download-session metadata, Resume Previous Download, and Windows sleep prevention while an active download worker is running. Screen locking/display-off remain unaffected.
 
-## Incremental library workflow (v2.1.6)
+## Incremental library workflow (v2.2.0)
 
 Point the application at the same HumbleLibrary folder used previously. The manager reconciles current Humble metadata, the previous catalogue and local files. Existing files are skipped, new/missing files can be downloaded, retained checksum mismatches are not automatically re-downloaded, and **Update Catalogue** regenerates the main and purchase pages while preserving historical catalogue entries.
 
 The local browser security model does not reliably expose an arbitrary full Windows folder path to a web page. The Choose Folder control can identify a folder where supported, but the full path may still need to be pasted/entered in the Library folder field.
 
 
-## Existing Library Audit & Repair — v2.1.6
+## Existing Library Audit & Repair — v2.2.0
 
-Point v2.1.6 at a HumbleLibrary created by an earlier release. **Scan Existing Library** and **Repair / Update Catalogue (Local Only)** do not download, move or delete ebook files. The audit reconciles the existing catalogue with the filesystem using the recorded path first, then exact filename + size, and finally a unique filename where size metadata is unavailable. Ambiguous matches are reported rather than guessed.
+Point v2.2.0 at a HumbleLibrary created by an earlier release. **Scan Existing Library** and **Repair / Update Catalogue (Local Only)** do not download, move or delete ebook files. The audit reconciles the existing catalogue with the filesystem using the recorded path first, then exact filename + size, and finally a unique filename where size metadata is unavailable. Ambiguous matches are reported rather than guessed.
 
 The regenerated catalogue searches purchase, product/book and filename text; distinguishes Complete, Partial, Missing and No files discovered; and uses available product images with a built-in generic book-cover fallback.
 
 
-## v2.1.6 — Unified Library Reconciliation
+## v2.2.0 — Unified Library Reconciliation
 
-v2.1.6 uses one local reconciliation model for audit, missing-file download selection and catalogue repair. Existing physical files are inventoried recursively and matched conservatively, including files stored under shortened Windows-safe paths. A file is not placed in the missing download queue merely because the latest calculated path differs from the historical physical path.
+v2.2.0 uses one local reconciliation model for audit, missing-file download selection and catalogue repair. Existing physical files are inventoried recursively and matched conservatively, including files stored under shortened Windows-safe paths. A file is not placed in the missing download queue merely because the latest calculated path differs from the historical physical path.
 
 The Browse button uses a native local folder chooser and returns the full filesystem path to the local web UI. After a successful missing-file download run, the library is audited again and the existing catalogue is regenerated.
 
 The generated catalogue now uses a compact list layout with pagination, search/filtering, smaller purchase pages, cover thumbnails/fallbacks and format-specific visual markers.
 
 **Security:** Use this software at your own risk. Downloaded files come from third-party sources; scan them with reputable, up-to-date antivirus/security software before opening or running them. See `DISCLAIMER.md` and `SECURITY.md`.
+
+
+## v2.2.0 hotfix
+
+v2.2.0 incorrectly limited its physical-file inventory to a predefined extension list. Humble libraries can contain many vendor-specific file types, so v2.2.0 inventories every ordinary file below the selected library root while excluding HLM's own internal/catalogue files. Re-scan an existing library after upgrading.
+
+The Humble catalogue refresh also fixes an unbound `old` variable and uses already reconciled physical paths where possible.
+
+
+## v2.2.0 existing-library upgrade
+
+v2.2.0 is designed to work with an existing v2.1.x HumbleLibrary. Select the existing library root and run **Scan Existing Library**. The application creates a persistent record registry from prior HLM metadata and the physical files already on disk. Run **Repair / Update Catalogue (Local Only)** afterwards to regenerate catalogue pages using those confirmed mappings.
+
+A confirmed local file is not considered missing merely because Windows path shortening caused its calculated path to differ. The downloader also persists the exact path whenever it reports an existing file.
+
+Purchases for which Humble returns no parsed downloadable files are now flagged for investigation and include metadata diagnostics. This is distinct from a known Humble file being missing locally.

@@ -4,9 +4,12 @@ from datetime import datetime,timezone
 from pathlib import Path
 from urllib.parse import urlparse,unquote,quote
 import yaml
+from library_state import load_state
 from library_paths import title,year,category,archive_path
+from humble_parser import parse_order_files, order_diagnostics
+from record_registry import records as registry_records
 
-SCHEMA_VERSION="1.2"; VERSION="2.1.6"
+SCHEMA_VERSION="1.3"; VERSION="2.1.6.1"
 
 def image_for(sp):
     for k in ("icon","image","logo","thumbnail"):
@@ -33,35 +36,46 @@ def _status(root):
     except Exception:return {}
 
 def reconcile_catalogue(details,archive_root):
-    root=Path(archive_root);oldmap,oldpurchases=_old_map(root);statuses=_status(root)
+    root=Path(archive_root);oldmap,oldpurchases=_old_map(root);statuses=_status(root);reg=registry_records(root)
     purchases=[];seen_purchase=set();pc=fc=0
     for o in details.values():
-        products=[];pid=str(o.get("gamekey"));seen_purchase.add(pid)
-        for pi,sp in enumerate(o.get("subproducts") or []):
-            pn=sp.get("human_name") or sp.get("machine_name") or f"Product {pi+1}";fs=[]
-            for gi,g in enumerate(sp.get("downloads") or []):
-                platform=g.get("platform") or g.get("machine_name") or "Files"
-                for fi,d in enumerate(g.get("download_struct") or []):
-                    u=(d.get("url") or {}).get("web")
-                    if not u:continue
-                    fid=f"{pi}:{gi}:{fi}";fn=Path(unquote(urlparse(u).path)).name or "download"
-                    ff={"product":pn,"platform":platform,"filename":fn}
-                    oldlp=old.get("local_path"); olddest=(root/oldlp) if oldlp else None; dest=olddest if olddest and olddest.exists() else archive_path(root,o,ff)
-                    try:local=dest.relative_to(root).as_posix()
-                    except Exception:local=str(dest)
-                    st=statuses.get(f"{pid}|{fid}",{})
-                    old=oldmap.get((pid,fid,fn),{})
-                    exists=dest.exists()
-                    status=st.get("status") or ("downloaded" if exists else ("missing" if old.get("downloaded") else "new"))
-                    fs.append({"file_id":fid,"format":d.get("name") or Path(fn).suffix.lstrip(".") or "file",
-                      "platform":platform,"filename":fn,"size_bytes":d.get("file_size"),"human_size":d.get("human_size"),
-                      "sha1":d.get("sha1"),"md5":d.get("md5"),"source_url":u,"local_path":local,
-                      "downloaded":exists,"status":status,
-                      "checksum_algorithm":st.get("checksum_algorithm"),"expected_checksum":st.get("expected_checksum"),
-                      "actual_checksum":st.get("actual_checksum"),"last_checked":st.get("updated_at")});fc+=1
-            products.append({"title":pn,"machine_name":sp.get("machine_name"),"image":image_for(sp),"files":fs});pc+=1
-        purchases.append({"id":pid,"title":title(o),"purchase_date":o.get("created"),"category":category(o),"year":year(o),"products":products})
-    # Preserve historical catalogue entries no longer returned by the current API.
+        products_by_name={};pid=str(o.get("gamekey"));seen_purchase.add(pid)
+        parsed=parse_order_files(o);diag=order_diagnostics(o)
+        submeta={}
+        for sp in o.get("subproducts") or []:
+            pn=sp.get("human_name") or sp.get("machine_name") or "Product"
+            submeta[pn]=sp
+        for f in parsed:
+            pn=f["product"];products_by_name.setdefault(pn,[])
+            fid=f["id"];fn=f["filename"];key=f"{pid}|{fid}"
+            old=oldmap.get((pid,fid,fn),{});st=statuses.get(key,{});rr=reg.get(key,{})
+            ff={"product":pn,"platform":f["platform"],"filename":fn}
+            candidates=[rr.get("local_path"),old.get("local_path"),st.get("local_path")]
+            dest=None
+            for lp in candidates:
+                if lp and (root/lp).exists():dest=root/lp;break
+            if dest is None:dest=archive_path(root,o,ff)
+            try:local=dest.relative_to(root).as_posix()
+            except Exception:local=str(dest)
+            exists=dest.exists()
+            status=st.get("status") or rr.get("status") or ("downloaded" if exists else ("missing" if old.get("downloaded") else "new"))
+            products_by_name[pn].append({"file_id":fid,"format":f["format"],"platform":f["platform"],"filename":fn,
+              "size_bytes":f.get("size"),"human_size":f.get("human_size"),"sha1":f.get("sha1"),"md5":f.get("md5"),
+              "source_url":f.get("url"),"local_path":local,"downloaded":exists,"status":status,
+              "matched_by":rr.get("confirmed_by") or old.get("matched_by"),
+              "checksum_algorithm":st.get("checksum_algorithm"),"expected_checksum":st.get("expected_checksum"),
+              "actual_checksum":st.get("actual_checksum"),"last_checked":st.get("updated_at") or rr.get("last_confirmed"),
+              "metadata_path":f.get("metadata_path")});fc+=1
+        # Preserve product names even when Humble returned no parsed files.
+        for sp in o.get("subproducts") or []:
+            pn=sp.get("human_name") or sp.get("machine_name") or "Product";products_by_name.setdefault(pn,[])
+        products=[]
+        for pn,fs in products_by_name.items():
+            sp=submeta.get(pn,{})
+            products.append({"title":pn,"machine_name":sp.get("machine_name"),"image":image_for(sp),"files":fs})
+            pc+=1
+        purchases.append({"id":pid,"title":title(o),"purchase_date":o.get("created"),"category":category(o),"year":year(o),
+                          "diagnostics":diag,"products":products})
     for op in oldpurchases:
         if str(op.get("id")) not in seen_purchase:
             cp=json.loads(json.dumps(op));cp["historical_only"]=True
@@ -72,17 +86,19 @@ def reconcile_catalogue(details,archive_root):
                 pc+=1
             purchases.append(cp)
     purchases.sort(key=lambda x:str(x.get("purchase_date") or ""),reverse=True)
+    zero=sum(1 for p in purchases if sum(len(x.get("files",[])) for x in p.get("products",[]))==0)
     return {"schema":"humble-library-catalogue","schema_version":SCHEMA_VERSION,
       "generated_at":datetime.now(timezone.utc).isoformat(),
       "generator":{"name":"Humble Library Manager","version":VERSION,"original_creator":"Arun Sutharshan","website":"https://www.sutharshan.co.uk"},
-      "source":"Humble Bundle","statistics":{"purchases":len(purchases),"products":pc,"files":fc},"purchases":purchases}
+      "source":"Humble Bundle","statistics":{"purchases":len(purchases),"products":pc,"files":fc,"zero_file_purchases":zero},
+      "purchases":purchases}
 
 GENERIC_BOOK_SVG="""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320"><rect width="240" height="320" rx="18" fill="#293b70"/><path d="M55 55h125a15 15 0 0 1 15 15v190H75a20 20 0 0 0-20 20V55z" fill="#f3f7ff"/><path d="M82 105h82M82 135h82M82 165h55" stroke="#3b5287" stroke-width="10" stroke-linecap="round"/><text x="122" y="220" text-anchor="middle" font-family="sans-serif" font-size="25" fill="#3b5287">BOOKS</text></svg>"""
 
 CSS="""body{font:15px system-ui;margin:0;background:#0b1020;color:#eef3ff}main{max-width:1180px;margin:auto;padding:28px}a{color:#82d8ff}.card{background:#151d33;border:1px solid #2d395b;border-radius:15px;padding:16px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}.muted{color:#9ba8c8}.badge{background:#293653;border-radius:20px;padding:4px 8px;font-size:12px}input,select{background:#0b1327;color:#fff;border:1px solid #394566;border-radius:9px;padding:10px}.files{width:100%;border-collapse:collapse}.files td,.files th{text-align:left;border-bottom:1px solid #29334e;padding:8px}.cover{max-width:120px;max-height:150px;border-radius:8px}.ok{color:#62e2c0}.warn{color:#ffcf70}.covers{display:flex;gap:7px;height:105px;margin:0 0 12px}.covers img{height:100px;max-width:78px;object-fit:cover;border-radius:7px}.ok{color:#62e2c0}.warn{color:#ffcf70}.bad{color:#ff8f9c}footer{margin-top:24px;padding:12px 0;color:#8995b1;border-top:1px solid #29334e;font-size:10px;line-height:1.45}footer a{color:#b7c8ff}"""
 
 def footer():
-    return """<footer>Humble Library Manager v2.1.4 · Originally created by Arun Sutharshan · <a href='https://www.sutharshan.co.uk'>sutharshan.co.uk</a> · Community Open-Source Project · MIT License<br>Independent project — not affiliated with or endorsed by Humble Bundle.</footer>"""
+    return """<footer>Humble Library Manager v2.2.0 · Originally created by Arun Sutharshan · <a href='https://www.sutharshan.co.uk'>sutharshan.co.uk</a> · Community Open-Source Project · MIT License<br>Independent project — not affiliated with or endorsed by Humble Bundle.</footer>"""
 
 def export_catalogue(details,archive_root):
     root=Path(archive_root);cat=root/"catalogue";pages=cat/"purchases";assets=cat/"assets"
@@ -202,8 +218,10 @@ def _compact_render(model,root):
                 size=html.escape(str(f.get("human_size") or f.get("size_bytes") or ""))
                 formats.append(f"<span class='format {' ' if localf else 'missing'}'>{('<a href='+repr(link)+'>'+txt+'</a>') if localf else txt} <span class='muted'>{size}</span></span>")
             img=prod.get("image") or "../assets/generic-book.svg"
-            books.append(f"<div class='book'><img src='{html.escape(img)}'><div><div class='title'>{html.escape(prod.get('title','Product'))}</div><div class='formats'>{''.join(formats) if formats else '<span class=warn>No downloadable files discovered</span>'}</div></div></div>")
-        (pages/f"{slug}.html").write_text(f"<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><link rel='stylesheet' href='../assets/catalogue.css'><main><p><a href='../../index.html'>← Library</a></p><h1>{html.escape(pur['title'])}</h1><p class='muted'>{html.escape(str(pur.get('purchase_date') or '')[:10])} · {html.escape(pur.get('category','Other'))} · {local}/{known} local</p>{''.join(books) if books else '<p class=warn>No product/file metadata is currently available.</p>'}{footer()}</main>",encoding="utf-8")
+            books.append(f"<div class='book'><img src='{html.escape(img)}'><div><div class='title'>{html.escape(prod.get('title','Product'))}</div><div class='formats'>{''.join(formats) if formats else '<span class=warn>No downloadable files discovered — see purchase diagnostics below</span>'}</div></div></div>")
+        diag=pur.get("diagnostics") or {}
+        diagnostic_html=(f"<details><summary>Purchase metadata diagnostics</summary><p class='muted'>Subproducts: {diag.get('subproducts','?')} · Download groups: {diag.get('download_groups','?')} · Download entries: {diag.get('download_struct_entries','?')} · Entries with web URL: {diag.get('entries_with_web_url','?')} · Parsed files: {diag.get('parsed_files','?')}</p><p class='warn'>{html.escape(str(diag.get('reason') or ''))}</p></details>" if known==0 else "")
+        (pages/f"{slug}.html").write_text(f"<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><link rel='stylesheet' href='../assets/catalogue.css'><main><p><a href='../../index.html'>← Library</a></p><h1>{html.escape(pur['title'])}</h1><p class='muted'>{html.escape(str(pur.get('purchase_date') or '')[:10])} · {html.escape(pur.get('category','Other'))} · {local}/{known} local</p>{''.join(books) if books else '<p class=warn>No product/file metadata is currently available.</p>'}{diagnostic_html}{footer()}</main>",encoding="utf-8")
     cats="".join(f"<option>{html.escape(x)}</option>" for x in sorted(set(x.get("category","Other") for x in model.get("purchases",[]))))
     script="""<script>const q=document.querySelector('#q'),c=document.querySelector('#cat'),s=document.querySelector('#status'),ps=document.querySelector('#ps');let page=1;function f(){let a=[...document.querySelectorAll('.item')].filter(x=>(!q.value||x.dataset.search.includes(q.value.toLowerCase()))&&(!c.value||x.dataset.cat===c.value)&&(!s.value||x.dataset.status===s.value)),n=+ps.value,start=(page-1)*n;document.querySelectorAll('.item').forEach(x=>x.style.display='none');a.slice(start,start+n).forEach(x=>x.style.display='grid');document.querySelector('#page').textContent=`Page ${page} of ${Math.max(1,Math.ceil(a.length/n))}`)}function nav(d){page=Math.max(1,page+d);f()}q.oninput=()=>{page=1;f()};c.onchange=s.onchange=ps.onchange=()=>{page=1;f()};window.onload=f;</script>"""
     index=f"<!doctype html><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Humble Library Catalogue</title><link rel='stylesheet' href='catalogue/assets/catalogue.css'><main><h1>Humble Library Catalogue</h1><p class='muted'>{model.get('statistics',{}).get('purchases',0)} purchases · {model.get('statistics',{}).get('files',0)} known files</p><div class='toolbar'><input id='q' placeholder='Search purchases, books and files…'><select id='cat'><option value=''>All categories</option>{cats}</select><select id='status'><option value=''>All statuses</option><option value='complete'>Complete</option><option value='partial'>Partial</option><option value='missing'>Missing</option><option value='nofiles'>No files discovered</option></select><select id='ps'><option>25</option><option>50</option><option>100</option></select></div><div class='list'>{''.join(rows)}</div><div class='pager'><button onclick='nav(-1)'>‹</button><span id='page'></span><button onclick='nav(1)'>›</button></div>{script}{footer()}</main>"
