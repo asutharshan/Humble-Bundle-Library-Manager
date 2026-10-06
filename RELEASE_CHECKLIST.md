@@ -1,0 +1,24 @@
+# Release Checklist
+
+- [ ] Update application version
+- [ ] Update date if appropriate
+- [ ] Update `CHANGELOG.md`
+- [ ] Review `LICENSE`
+- [ ] Review `DISCLAIMER.md`
+- [ ] Run syntax checks
+- [ ] Test UI launch
+- [ ] Test individual URL
+- [ ] Test playlist scan
+- [ ] Test YouTube channel/library scan
+- [ ] Test MP3 output
+- [ ] Test MP4 output
+- [ ] Test duplicate detection
+- [ ] Test history reset
+- [ ] Test pause/resume
+- [ ] Test stop-after-current-file
+- [ ] Test browser-cookie mode only with authorised content
+- [ ] Check logs for secrets
+- [ ] Build Windows EXE
+- [ ] Test EXE on a clean Windows environment
+- [ ] Review dependency licences
+- [ ] Scan release files for secrets/private data

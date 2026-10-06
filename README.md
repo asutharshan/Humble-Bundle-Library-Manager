@@ -1,136 +1,180 @@
-# Humble Library Manager
+# Media Utility v2.1
 
-**Browse, catalogue and back up downloadable content from your own Humble library.**
+Windows desktop utility for scanning supported media URLs, loading channel/playlist libraries, selecting individual items, and exporting authorised media to MP3 and/or MP4.
 
-**Version 2.2.0 · 29 September 2026**
+**Author:** Arun Sutharshan  
+**Version:** 2.1  
+**Date:** 06 October 2026  
+**Licence:** Media Utility Personal & Non-Commercial License
 
-Originally created by **Arun Sutharshan**  
-Website: https://www.sutharshan.co.uk  
-Contact: arun@sutharshan.co.uk
+> **Authorised Use Notice:** Use only with media you own, created, are licensed to use, or are otherwise authorised to access and download. Media Utility does not grant rights to third-party content and does not bypass DRM or technical access controls.
 
-> An independent community open-source project. Not affiliated with or endorsed by Humble Bundle, Inc.
+## What's new in v2.1
 
-## What it does
+v2.1 addresses newer YouTube extraction requirements.
 
-Humble Library Manager provides a local browser interface for reviewing purchases and downloadable files exposed to your authenticated account.
+### YouTube JavaScript challenge support
 
-- Cookie validation without deliberately persisting `_simpleauth_sess`.
-- Purchase search and 20 / 50 / 100 pagination.
-- Select all matching, current page, individual purchases or individual files.
-- Supports all exposed file types. ZIP/PDF/EPUB/EXE/etc. are formats, not categories.
-- Preserves purchase → product → platform → file relationships.
-- Existing-file skipping, `.part` resume attempts and checksum validation where available.
-- Live download progress and logs.
-- Searchable offline HTML catalogue.
-- Individual purchase/product pages with file type, size, status and local links.
-- JSON and YAML catalogue exports for future management-system integration.
+Modern `yt-dlp` YouTube extraction can require an external JavaScript runtime.
 
-## Windows quick start
+Media Utility v2.1:
 
-1. Install Python 3.10+.
-2. Download/extract the repository.
-3. Run `START_HUMBLE_MANAGER.bat`.
-4. Open `http://127.0.0.1:8765` if it does not open automatically.
-5. Sign into Humble normally and obtain the `_simpleauth_sess` cookie value from your browser developer tools.
-6. Paste the value into **Authentication** and select **Validate & Load**.
-7. Review/select purchases and files.
-8. Use **Export Catalogue** to create the offline HTML/JSON/YAML catalogue.
-9. Use **Download Selected** to create your local archive.
+- installs/updates `yt-dlp[default]`, which includes the compatible `yt-dlp-ejs` package;
+- checks for the recommended **Deno** runtime;
+- attempts to install Deno automatically on Windows when it is missing;
+- detects Deno when installed through PATH, WinGet, or the standard `%USERPROFILE%\.deno\bin` location;
+- passes the Deno path directly to the `yt-dlp` Python API;
+- displays runtime status in the GUI.
 
-**Treat `_simpleauth_sess` like a password. Never commit or share it.**
+The yt-dlp project currently recommends Deno 2.3+ for YouTube JavaScript challenge solving.
 
-## Archive/catalogue
+### YouTube authentication / anti-bot handling
+
+The UI now has:
+
+- browser-cookie selector;
+- **Test YouTube Auth** button;
+- authentication status;
+- clearer handling of the YouTube message:
+  `Sign in to confirm you're not a bot`;
+- guidance to choose the browser where the user is already legitimately signed into YouTube.
+
+Media Utility never intentionally writes raw cookies or authentication tokens into its activity log.
+
+### Detailed percentage logging
+
+In addition to the progress bar, the activity log records progress at approximately 5% intervals:
 
 ```text
-HumbleLibrary/
-├── index.html
-├── catalogue/
-│   ├── library.json
-│   ├── library.yml
-│   ├── assets/
-│   └── purchases/
-├── Books/
-├── Software/
-├── Games & Software/
-├── Audio/
-├── Other/
-└── _library/
+PROGRESS | MP4 | 35.0% | Speed=... | ETA=... | ID=... | title
 ```
 
-`library.json` is the preferred machine-readable format. YAML mirrors the catalogue in a more human-readable form. A versioned schema is included for future integrations.
+Each queued job logs:
 
-Generated catalogues can contain source download URLs. Keep them private unless reviewed/redacted.
+- source;
+- media ID;
+- title;
+- duration;
+- URL;
+- output format;
+- live percentage;
+- speed;
+- ETA;
+- completion/failure/authentication status.
 
-## Community development
+## Existing v2 features
 
-This project was started as a personal project but is intended for continued development and maintenance by the open-source community. Bug fixes, compatibility work, documentation, tests, UI improvements and new features are welcome.
+- multiple URLs;
+- YouTube video/playlist/channel scanning;
+- selectable library table;
+- MP3 and MP4 multi-select;
+- MP3 quality selection;
+- MP4 maximum-resolution selection;
+- thumbnails and metadata;
+- persistent duplicate detection;
+- history reset;
+- queue pause/resume;
+- stop-after-current-file;
+- browser-cookie access for legitimate authenticated content;
+- Windows EXE build script.
 
-See `CONTRIBUTING.md`, `MAINTAINERS.md`, `SECURITY.md` and `CODE_OF_CONDUCT.md`.
+## Channel/library workflow
 
-## AI-assisted development
+Paste a YouTube channel, playlist, or supported collection URL and choose:
 
-AI-assisted development tools, including ChatGPT, have been used to support coding, documentation, review, debugging and design exploration. Human maintainers remain responsible for requirements, architectural decisions, testing and released code. See `DEVELOPMENT.md`.
+```text
+Scan / Load Library
+```
 
-## License
+Media Utility enumerates the library without downloading the media and allows individual selection before downloading.
 
-Released under the **MIT License**. See `LICENSE`.
+## Duplicate detection
 
-## Disclaimer
+History is stored locally under:
 
-This is unofficial software using interfaces that may change without notice. It does not bypass DRM or access controls and is intended only for content the user is legitimately entitled to access.
+```text
+%APPDATA%\MediaUtility\download_history.json
+```
 
-The software is provided **as-is and without warranty**. Use it at your own risk. See `DISCLAIMER.md`.
+Duplicate keys primarily use source/extractor + media ID + requested output format.
 
+History persists until:
 
-## Windows path handling
+```text
+History → Reset Duplicate History
+```
 
-Version 2.2.0 shortens long generated archive path components using deterministic hashes. Full Humble names remain in catalogue metadata. A path creation failure is logged against that file rather than stopping the complete download job.
+## Installation
 
-## Retry and checksum behaviour
+Run:
 
-Version 2.2.0 numbers final file outcomes (`1 of N`, `2 of N`, etc.). Genuine HTTP/network/filesystem failures are placed at the end of a rotational retry queue for up to five total attempts per file. Checksum mismatches are not repeatedly downloaded: the completed file is retained and clearly flagged with the expected and calculated checksum.
+```text
+INSTALL_AND_RUN.bat
+```
 
+The installer:
 
-## v2.2.0 reliability and UI
+1. verifies Python/pip;
+2. updates pip;
+3. installs/updates `yt-dlp[default]` and `imageio-ffmpeg`;
+4. checks for Deno;
+5. attempts to install Deno when missing;
+6. checks Tkinter;
+7. starts Media Utility.
 
-Adds a fixed catalogue exporter using shared path utilities, an in-app cookie help guide, custom favicon, credits footer, persistent download-session metadata, Resume Previous Download, and Windows sleep prevention while an active download worker is running. Screen locking/display-off remain unaffected.
+A normal Python installation containing pip and Tkinter is required.
 
-## Incremental library workflow (v2.2.0)
+## Browser cookies
 
-Point the application at the same HumbleLibrary folder used previously. The manager reconciles current Humble metadata, the previous catalogue and local files. Existing files are skipped, new/missing files can be downloaded, retained checksum mismatches are not automatically re-downloaded, and **Update Catalogue** regenerates the main and purchase pages while preserving historical catalogue entries.
+Select the browser where you are already signed into the relevant service:
 
-The local browser security model does not reliably expose an arbitrary full Windows folder path to a web page. The Choose Folder control can identify a folder where supported, but the full path may still need to be pasted/entered in the Library folder field.
+- Chrome
+- Edge
+- Firefox
+- Brave
+- Opera
+- Vivaldi
 
+Then use **Test YouTube Auth** or retry the library scan.
 
-## Existing Library Audit & Repair — v2.2.0
+Browser-cookie access is provided only for content the user is already authorised to access.
 
-Point v2.2.0 at a HumbleLibrary created by an earlier release. **Scan Existing Library** and **Repair / Update Catalogue (Local Only)** do not download, move or delete ebook files. The audit reconciles the existing catalogue with the filesystem using the recorded path first, then exact filename + size, and finally a unique filename where size metadata is unavailable. Ambiguous matches are reported rather than guessed.
+## Standalone EXE
 
-The regenerated catalogue searches purchase, product/book and filename text; distinguishes Complete, Partial, Missing and No files discovered; and uses available product images with a built-in generic book-cover fallback.
+Run:
 
+```text
+BUILD_EXE.bat
+```
 
-## v2.2.0 — Unified Library Reconciliation
+This builds:
 
-v2.2.0 uses one local reconciliation model for audit, missing-file download selection and catalogue repair. Existing physical files are inventoried recursively and matched conservatively, including files stored under shortened Windows-safe paths. A file is not placed in the missing download queue merely because the latest calculated path differs from the historical physical path.
+```text
+dist\MediaUtility.exe
+```
 
-The Browse button uses a native local folder chooser and returns the full filesystem path to the local web UI. After a successful missing-file download run, the library is audited again and the existing catalogue is regenerated.
+Deno remains an external runtime and should also be installed on the destination Windows machine for reliable modern YouTube extraction.
 
-The generated catalogue now uses a compact list layout with pagination, search/filtering, smaller purchase pages, cover thumbnails/fallbacks and format-specific visual markers.
+## Public GitHub repository
 
-**Security:** Use this software at your own risk. Downloaded files come from third-party sources; scan them with reputable, up-to-date antivirus/security software before opening or running them. See `DISCLAIMER.md` and `SECURITY.md`.
+This package includes:
 
+- `LICENSE`
+- `DISCLAIMER.md`
+- `NOTICE.md`
+- `SECURITY.md`
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
+- `CHANGELOG.md`
+- `.gitignore`
+- GitHub issue templates
+- pull request template
+- installation/troubleshooting documentation
 
-## v2.2.0 hotfix
+## Commercial/licensing position
 
-v2.2.0 incorrectly limited its physical-file inventory to a predefined extension list. Humble libraries can contain many vendor-specific file types, so v2.2.0 inventories every ordinary file below the selected library root while excluding HLM's own internal/catalogue files. Re-scan an existing library after upgrading.
+Media Utility is source-available under the **Media Utility Personal & Non-Commercial License**.
 
-The Humble catalogue refresh also fixes an unbound `old` variable and uses already reconciled physical paths where possible.
+Limited internal organisational use with content owned or properly licensed by that organisation is permitted under the licence. Commercial redistribution, paid-service use, OEM integration, or commercial exploitation of the software itself requires written permission from the copyright holder.
 
-
-## v2.2.0 existing-library upgrade
-
-v2.2.0 is designed to work with an existing v2.1.x HumbleLibrary. Select the existing library root and run **Scan Existing Library**. The application creates a persistent record registry from prior HLM metadata and the physical files already on disk. Run **Repair / Update Catalogue (Local Only)** afterwards to regenerate catalogue pages using those confirmed mappings.
-
-A confirmed local file is not considered missing merely because Windows path shortening caused its calculated path to differ. The downloader also persists the exact path whenever it reports an existing file.
-
-Purchases for which Humble returns no parsed downloadable files are now flagged for investigation and include metadata diagnostics. This is distinct from a known Humble file being missing locally.
+See `LICENSE` for the controlling terms.

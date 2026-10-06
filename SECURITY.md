@@ -1,15 +1,53 @@
-# Security
+# Security Policy
 
-## Session cookie
-Treat `_simpleauth_sess` like a password. Never publish it, commit it to Git, include it in screenshots, or share it with another person. Humble Library Manager keeps the entered cookie in application memory and does not intentionally write it to the project configuration.
+## Supported version
 
-## Downloaded files
-Files are supplied by third-party services/content providers. Humble Library Manager does not guarantee that downloaded content is safe, authentic or free of malicious code.
+| Version | Supported |
+|---|---|
+| 2.0.1 | Yes |
+| 2.0.0 | Best effort |
+| 1.x | Best effort only |
 
-Always scan downloaded files with reputable, up-to-date antivirus/security software before opening or running them. Take particular care with `.exe`, `.msi`, `.dmg`, `.pkg`, `.apk`, scripts and archives. The application does not automatically execute downloaded installers or programs.
+## Sensitive information
 
-## Catalogue data
-Exported catalogue JSON/YAML may contain source download URLs. Review and redact catalogue data before publishing or sharing it.
+Do not publish:
 
-## Reporting
-Do not include session cookies, private download URLs or personal information in public security reports.
+- cookies;
+- passwords;
+- authentication tokens;
+- API keys;
+- private media URLs;
+- customer information;
+- personally identifiable information;
+- secrets contained in logs.
+
+## Browser cookies
+
+Media Utility should never intentionally:
+
+- upload browser cookies to a project-controlled server;
+- write raw cookies to application logs;
+- display authentication tokens in the UI;
+- include credentials in crash reports.
+
+## Reporting vulnerabilities
+
+Use GitHub private security reporting where available.
+
+If public reporting is unavoidable, redact all sensitive information.
+
+A useful report should include:
+
+- Media Utility version;
+- Windows version;
+- Python version;
+- steps to reproduce;
+- expected behaviour;
+- actual behaviour;
+- redacted logs.
+
+## Dependency security
+
+Keep dependencies current and review them before releases.
+
+Downloaded media should be treated as untrusted content and should never be automatically executed.

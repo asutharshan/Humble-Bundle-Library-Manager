@@ -1,13 +1,57 @@
-# Contributing
+# Contributing to Media Utility
 
-Contributions are welcome: bug fixes, compatibility updates, documentation, tests, UI improvements and new library-management features.
+Contributions are welcome for lawful and authorised use cases.
 
-1. Fork the repository and create a focused branch.
-2. Never submit authentication cookies, purchased content or private download credentials.
-3. Test changes against content you are legitimately entitled to access.
-4. File extensions must not determine whether an item is a book, game or software title.
-5. Do not add DRM bypassing or access-control circumvention.
-6. Explain significant behaviour/schema changes and update documentation.
-7. AI-assisted contributions are permitted, but contributors remain responsible for reviewing and testing submitted work.
+Good contribution areas include:
 
-Contributions are made under the repository's MIT License.
+- UI improvements;
+- accessibility;
+- performance;
+- logging;
+- queue management;
+- duplicate detection;
+- testing;
+- packaging;
+- documentation;
+- lawful media-library workflows.
+
+Do not submit functionality intended to:
+
+- bypass DRM;
+- steal sessions;
+- bypass paid access;
+- obtain unauthorised private content;
+- defeat authentication;
+- evade technical protection measures;
+- facilitate copyright infringement.
+
+## Development
+
+Install dependencies:
+
+```text
+python -m pip install -r requirements.txt
+```
+
+Run:
+
+```text
+python media_utility.py
+```
+
+## Pull requests
+
+Please:
+
+1. keep changes focused;
+2. explain what changed;
+3. describe how it was tested;
+4. avoid committing secrets or private data;
+5. update documentation where behaviour changes;
+6. update `CHANGELOG.md` for user-visible changes.
+
+## Licence
+
+By contributing, you agree that your contribution may be distributed under the project's current licence.
+
+Do not contribute code you do not have the right to submit.

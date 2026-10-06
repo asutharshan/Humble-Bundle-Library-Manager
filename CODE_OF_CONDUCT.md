@@ -1,5 +1,14 @@
 # Code of Conduct
 
-Be respectful, constructive and professional. Harassment, discrimination, threats, doxxing, credential sharing, piracy, or requests to bypass access controls are not acceptable in project spaces.
+Participants are expected to communicate respectfully and protect user privacy.
 
-Maintainers may moderate contributions or participation to keep the project safe, lawful and useful.
+Unacceptable behaviour includes:
+
+- harassment;
+- discriminatory abuse;
+- threats;
+- publishing another person's private information;
+- publishing credentials, cookies or authentication tokens;
+- encouraging unauthorised access to private systems or content.
+
+Maintainers may remove or restrict contributions that violate these expectations.
