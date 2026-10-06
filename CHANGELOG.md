@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.1] - 2026-10-06
+
+### Fixed
+- YouTube authentication test button remains visible after unsuccessful tests
+- long authentication messages no longer push action buttons off screen
+- cookie-browser status updates immediately when browser selection changes
+- added URL-list vertical/horizontal scrollbars
+- added library-table vertical/horizontal scrollbars
+- added activity-log scrollbars
+- moved Download Selected / Execute toolbar above library list for small-screen visibility
+- reduced minimum UI dimensions and compacted lower status/log area
+
 ## [2.1.0] - 2026-10-06
 
 ### Added

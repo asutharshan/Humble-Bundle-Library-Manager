@@ -1,9 +1,9 @@
-# Media Utility v2.1
+# Media Utility v2.1.1
 
 Windows desktop utility for scanning supported media URLs, loading channel/playlist libraries, selecting individual items, and exporting authorised media to MP3 and/or MP4.
 
 **Author:** Arun Sutharshan  
-**Version:** 2.1  
+**Version:** 2.1.1  
 **Date:** 06 October 2026  
 **Licence:** Media Utility Personal & Non-Commercial License
 
@@ -178,3 +178,15 @@ Media Utility is source-available under the **Media Utility Personal & Non-Comme
 Limited internal organisational use with content owned or properly licensed by that organisation is permitted under the licence. Commercial redistribution, paid-service use, OEM integration, or commercial exploitation of the software itself requires written permission from the copyright holder.
 
 See `LICENSE` for the controlling terms.
+
+
+## v2.1.1 UI maintenance
+
+- Test YouTube Auth remains permanently visible after failed or successful tests.
+- Authentication status is kept short; detailed errors remain in the dialog and activity log.
+- Changing the cookie browser immediately refreshes the displayed browser/runtime state.
+- URL input now has vertical and horizontal scrollbars.
+- Channel/library results now have vertical and horizontal scrollbars.
+- Activity log now also has scrollbars.
+- Download Selected / Execute is positioned above the library table so it remains visible on smaller displays.
+- Reduced minimum window size and compacted the footer/log area.

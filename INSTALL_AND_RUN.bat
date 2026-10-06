@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
-title Media Utility v2.1 Installer
+title Media Utility v2.1.1 Installer
 color 0B
 
 echo ==========================================================================
-echo   Media Utility v2.1
+echo   Media Utility v2.1.1
 echo   Arun Sutharshan - 06 October 2026
 echo   Authorised-use media management utility
 echo ==========================================================================
@@ -102,7 +102,7 @@ echo [5/5] Checking Tkinter...
 if errorlevel 1 goto :tk_error
 
 echo.
-echo Starting Media Utility v2.1...
+echo Starting Media Utility v2.1.1...
 %PY% "%~dp0media_utility.py"
 if errorlevel 1 (
     echo.

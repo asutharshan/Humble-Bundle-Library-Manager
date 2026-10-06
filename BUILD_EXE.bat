@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Build Media Utility v2.1 EXE
+title Build Media Utility v2.1.1 EXE
 color 0A
 
 where py >nul 2>nul

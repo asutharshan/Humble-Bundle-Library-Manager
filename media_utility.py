@@ -4,7 +4,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-APP_NAME='Media Utility'; VERSION='2.1'; APP_DATE='06 October 2026'; AUTHOR='Arun Sutharshan'
+APP_NAME='Media Utility'; VERSION='2.1.1'; APP_DATE='06 October 2026'; AUTHOR='Arun Sutharshan'
 APP_DIR=Path(os.getenv('APPDATA', str(Path.home())))/'MediaUtility'; APP_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_FILE=APP_DIR/'download_history.json'; SETTINGS_FILE=APP_DIR/'settings.json'
 
@@ -118,7 +118,7 @@ def youtube_error_kind(message):
 
 class App(tk.Tk):
     def __init__(self):
-        super().__init__(); self.title(f'{APP_NAME} v{VERSION}'); self.geometry('1240x840'); self.minsize(1050,720); self.configure(bg='#0d1422')
+        super().__init__(); self.title(f'{APP_NAME} v{VERSION}'); self.geometry('1180x760'); self.minsize(820,620); self.configure(bg='#0d1422')
         self.events=queue.Queue(); self.stop_requested=False; self.pause_requested=False
         self.history=load_json(HISTORY_FILE,{}); self.settings=load_json(SETTINGS_FILE,{})
         self.destination=tk.StringVar(value=self.settings.get('destination',str(Path.home()/'Downloads')))
@@ -145,30 +145,158 @@ class App(tk.Tk):
         nb=ttk.Notebook(o); nb.pack(fill='both',expand=True); self.dtab=ttk.Frame(nb,padding=12); self.htab=ttk.Frame(nb,padding=12); nb.add(self.dtab,text='Download / Library'); nb.add(self.htab,text='History'); self._download_tab(); self._history_tab()
 
     def _download_tab(self):
-        top=ttk.Frame(self.dtab,style='Panel.TFrame',padding=12); top.pack(fill='x')
-        ttk.Label(top,text='URL(s), playlist or channel URL',style='Panel.TLabel').grid(row=0,column=0,columnspan=6,sticky='w')
-        self.links=tk.Text(top,height=4,bg='#09111f',fg='#eaf3ff',insertbackground='white',font=('Consolas',10),relief='flat',padx=8,pady=8); self.links.grid(row=1,column=0,columnspan=6,sticky='ew',pady=(4,10))
-        ttk.Label(top,text='Destination',style='Panel.TLabel').grid(row=2,column=0,sticky='w'); tk.Entry(top,textvariable=self.destination,bg='#09111f',fg='#eaf3ff',insertbackground='white',relief='flat',font=('Segoe UI',10)).grid(row=3,column=0,columnspan=4,sticky='ew',padx=(0,6),ipady=6)
-        ttk.Button(top,text='Browse…',command=self._browse).grid(row=3,column=4,sticky='ew'); ttk.Button(top,text='Scan / Load Library',style='Accent.TButton',command=self.scan).grid(row=3,column=5,sticky='ew',padx=(8,0))
-        ttk.Label(top,text='Browser cookies',style='Panel.TLabel').grid(row=4,column=0,sticky='w',pady=(12,2)); ttk.Combobox(top,textvariable=self.cookie_browser,state='readonly',values=['None','Chrome','Edge','Firefox','Brave','Opera','Vivaldi'],width=15).grid(row=5,column=0,sticky='w')
-        ttk.Label(top,text='MP3 quality',style='Panel.TLabel').grid(row=4,column=1,sticky='w',pady=(12,2)); qf=ttk.Frame(top,style='Panel.TFrame'); qf.grid(row=5,column=1,sticky='w'); ttk.Checkbutton(qf,text='MP3',variable=self.want_mp3).pack(side='left'); ttk.Combobox(qf,textvariable=self.mp3_quality,state='readonly',values=['128','160','192','256','320'],width=6).pack(side='left',padx=4)
-        ttk.Label(top,text='MP4 max resolution',style='Panel.TLabel').grid(row=4,column=2,sticky='w',pady=(12,2)); vf=ttk.Frame(top,style='Panel.TFrame'); vf.grid(row=5,column=2,sticky='w'); ttk.Checkbutton(vf,text='MP4',variable=self.want_mp4).pack(side='left'); ttk.Combobox(vf,textvariable=self.mp4_resolution,state='readonly',values=['Best','2160','1440','1080','720','480','360'],width=7).pack(side='left',padx=4)
-        opts=ttk.Frame(top,style='Panel.TFrame'); opts.grid(row=5,column=3,columnspan=3,sticky='w'); ttk.Checkbutton(opts,text='Thumbnail',variable=self.embed_thumb).pack(side='left',padx=(0,8)); ttk.Checkbutton(opts,text='Metadata',variable=self.embed_metadata).pack(side='left',padx=(0,8)); ttk.Checkbutton(opts,text='Skip duplicates',variable=self.skip_duplicates).pack(side='left')
-        runtime=ttk.Frame(top,style='Panel.TFrame'); runtime.grid(row=6,column=0,columnspan=6,sticky='ew',pady=(12,0))
-        ttk.Label(runtime,textvariable=self.runtime_status,style='Panel.TLabel').pack(side='left')
-        ttk.Label(runtime,text='  |  ',style='Panel.TLabel').pack(side='left')
-        ttk.Label(runtime,textvariable=self.auth_status,style='Panel.TLabel').pack(side='left')
-        ttk.Button(runtime,text='Refresh Runtime',command=self.refresh_runtime_status).pack(side='right')
-        ttk.Button(runtime,text='Test YouTube Auth',command=self.test_youtube_auth).pack(side='right',padx=(0,6))
-        for i in range(6): top.columnconfigure(i,weight=1 if i<4 else 0)
-        bar=ttk.Frame(self.dtab); bar.pack(fill='x',pady=(10,5)); ttk.Button(bar,text='Select all',command=lambda:self._set_all(True)).pack(side='left'); ttk.Button(bar,text='Select none',command=lambda:self._set_all(False)).pack(side='left',padx=5); ttk.Button(bar,text='Invert',command=self._invert).pack(side='left'); ttk.Label(bar,text='Double-click a row to toggle selection.',style='Muted.TLabel').pack(side='left',padx=12); self.count_label=ttk.Label(bar,text='0 items',style='Muted.TLabel'); self.count_label.pack(side='right')
-        cols=('sel','status','source','title','duration','date','id'); self.tree=ttk.Treeview(self.dtab,columns=cols,show='headings',selectmode='browse'); widths={'sel':55,'status':110,'source':85,'title':510,'duration':75,'date':95,'id':130}; heads={'sel':'Pick','status':'Status','source':'Source','title':'Title','duration':'Duration','date':'Date','id':'Media ID'}
-        for c in cols: self.tree.heading(c,text=heads[c]); self.tree.column(c,width=widths[c],stretch=(c=='title'))
-        self.tree.pack(fill='both',expand=True); self.tree.bind('<Double-1>',self._toggle_row)
-        ctl=ttk.Frame(self.dtab); ctl.pack(fill='x',pady=(8,0)); self.download_btn=ttk.Button(ctl,text='▶ Download Selected',style='Accent.TButton',command=self.start_download); self.download_btn.pack(side='left'); self.pause_btn=ttk.Button(ctl,text='Pause after current file',command=self.toggle_pause,state='disabled'); self.pause_btn.pack(side='left',padx=5); self.stop_btn=ttk.Button(ctl,text='Stop after current file',command=self.stop,state='disabled'); self.stop_btn.pack(side='left'); ttk.Button(ctl,text='Reset list',command=self.reset_list).pack(side='right')
-        st=ttk.Frame(self.dtab); st.pack(fill='x',pady=(8,3)); ttk.Label(st,textvariable=self.status).pack(side='left'); ttk.Progressbar(st,variable=self.progress,maximum=100).pack(side='right',fill='x',expand=True,padx=(12,0)); ttk.Label(self.dtab,textvariable=self.current_file,style='Muted.TLabel').pack(anchor='w')
-        self.log=tk.Text(self.dtab,height=9,bg='#080e18',fg='#d7ecff',relief='flat',font=('Consolas',9),state='disabled',padx=8,pady=8); self.log.pack(fill='x',pady=(4,0))
+        # Use grid for the main tab so action controls remain visible even on smaller screens.
+        self.dtab.columnconfigure(0, weight=1)
+        self.dtab.rowconfigure(3, weight=1)
 
+        top=ttk.Frame(self.dtab,style='Panel.TFrame',padding=10)
+        top.grid(row=0,column=0,sticky='ew')
+        for i in range(6):
+            top.columnconfigure(i,weight=1 if i < 4 else 0)
+
+        ttk.Label(top,text='URL(s), playlist or channel URL',style='Panel.TLabel').grid(row=0,column=0,columnspan=6,sticky='w')
+
+        # URL box with both vertical and horizontal scrollbars.
+        link_frame=ttk.Frame(top,style='Panel.TFrame')
+        link_frame.grid(row=1,column=0,columnspan=6,sticky='ew',pady=(4,8))
+        link_frame.columnconfigure(0,weight=1)
+        self.links=tk.Text(
+            link_frame,height=4,wrap='none',bg='#09111f',fg='#eaf3ff',
+            insertbackground='white',font=('Consolas',10),relief='flat',padx=8,pady=8
+        )
+        link_v=ttk.Scrollbar(link_frame,orient='vertical',command=self.links.yview)
+        link_h=ttk.Scrollbar(link_frame,orient='horizontal',command=self.links.xview)
+        self.links.configure(yscrollcommand=link_v.set,xscrollcommand=link_h.set)
+        self.links.grid(row=0,column=0,sticky='ew')
+        link_v.grid(row=0,column=1,sticky='ns')
+        link_h.grid(row=1,column=0,sticky='ew')
+
+        ttk.Label(top,text='Destination',style='Panel.TLabel').grid(row=2,column=0,sticky='w')
+        tk.Entry(
+            top,textvariable=self.destination,bg='#09111f',fg='#eaf3ff',
+            insertbackground='white',relief='flat',font=('Segoe UI',10)
+        ).grid(row=3,column=0,columnspan=4,sticky='ew',padx=(0,6),ipady=5)
+        ttk.Button(top,text='Browse…',command=self._browse).grid(row=3,column=4,sticky='ew')
+        ttk.Button(top,text='Scan / Load Library',style='Accent.TButton',command=self.scan).grid(row=3,column=5,sticky='ew',padx=(8,0))
+
+        ttk.Label(top,text='Browser cookies',style='Panel.TLabel').grid(row=4,column=0,sticky='w',pady=(10,2))
+        self.cookie_combo=ttk.Combobox(
+            top,textvariable=self.cookie_browser,state='readonly',
+            values=['None','Chrome','Edge','Firefox','Brave','Opera','Vivaldi'],width=14
+        )
+        self.cookie_combo.grid(row=5,column=0,sticky='w')
+        self.cookie_combo.bind('<<ComboboxSelected>>',lambda e:self._cookie_changed())
+
+        ttk.Label(top,text='MP3 quality',style='Panel.TLabel').grid(row=4,column=1,sticky='w',pady=(10,2))
+        qf=ttk.Frame(top,style='Panel.TFrame')
+        qf.grid(row=5,column=1,sticky='w')
+        ttk.Checkbutton(qf,text='MP3',variable=self.want_mp3).pack(side='left')
+        ttk.Combobox(qf,textvariable=self.mp3_quality,state='readonly',values=['128','160','192','256','320'],width=6).pack(side='left',padx=4)
+
+        ttk.Label(top,text='MP4 max resolution',style='Panel.TLabel').grid(row=4,column=2,sticky='w',pady=(10,2))
+        vf=ttk.Frame(top,style='Panel.TFrame')
+        vf.grid(row=5,column=2,sticky='w')
+        ttk.Checkbutton(vf,text='MP4',variable=self.want_mp4).pack(side='left')
+        ttk.Combobox(vf,textvariable=self.mp4_resolution,state='readonly',values=['Best','2160','1440','1080','720','480','360'],width=7).pack(side='left',padx=4)
+
+        opts=ttk.Frame(top,style='Panel.TFrame')
+        opts.grid(row=5,column=3,columnspan=3,sticky='w')
+        ttk.Checkbutton(opts,text='Thumbnail',variable=self.embed_thumb).pack(side='left',padx=(0,8))
+        ttk.Checkbutton(opts,text='Metadata',variable=self.embed_metadata).pack(side='left',padx=(0,8))
+        ttk.Checkbutton(opts,text='Skip duplicates',variable=self.skip_duplicates).pack(side='left')
+
+        # Runtime/auth status on its own compact row. Buttons are isolated on the right
+        # so long status text cannot push them out of view.
+        runtime=ttk.Frame(top,style='Panel.TFrame')
+        runtime.grid(row=6,column=0,columnspan=6,sticky='ew',pady=(10,0))
+        runtime.columnconfigure(0,weight=1)
+        status_box=ttk.Frame(runtime,style='Panel.TFrame')
+        status_box.grid(row=0,column=0,sticky='ew')
+        ttk.Label(status_box,textvariable=self.runtime_status,style='Panel.TLabel').pack(anchor='w')
+        self.auth_status_label=ttk.Label(status_box,textvariable=self.auth_status,style='Panel.TLabel')
+        self.auth_status_label.pack(anchor='w',pady=(2,0))
+
+        auth_buttons=ttk.Frame(runtime,style='Panel.TFrame')
+        auth_buttons.grid(row=0,column=1,sticky='ne',padx=(12,0))
+        self.auth_test_btn=ttk.Button(auth_buttons,text='Test YouTube Auth',command=self.test_youtube_auth)
+        self.auth_test_btn.pack(side='left',padx=(0,6))
+        ttk.Button(auth_buttons,text='Refresh Runtime',command=self.refresh_runtime_status).pack(side='left')
+
+        # Always-visible selection and execution toolbar ABOVE the library table.
+        toolbar=ttk.Frame(self.dtab)
+        toolbar.grid(row=1,column=0,sticky='ew',pady=(8,5))
+        toolbar.columnconfigure(1,weight=1)
+
+        selectbar=ttk.Frame(toolbar)
+        selectbar.grid(row=0,column=0,sticky='w')
+        ttk.Button(selectbar,text='Select all',command=lambda:self._set_all(True)).pack(side='left')
+        ttk.Button(selectbar,text='Select none',command=lambda:self._set_all(False)).pack(side='left',padx=5)
+        ttk.Button(selectbar,text='Invert',command=self._invert).pack(side='left')
+
+        actionbar=ttk.Frame(toolbar)
+        actionbar.grid(row=0,column=1,sticky='e')
+        self.download_btn=ttk.Button(actionbar,text='▶ Download Selected / Execute',style='Accent.TButton',command=self.start_download)
+        self.download_btn.pack(side='left')
+        self.pause_btn=ttk.Button(actionbar,text='Pause after current',command=self.toggle_pause,state='disabled')
+        self.pause_btn.pack(side='left',padx=5)
+        self.stop_btn=ttk.Button(actionbar,text='Stop after current',command=self.stop,state='disabled')
+        self.stop_btn.pack(side='left')
+        ttk.Button(actionbar,text='Reset list',command=self.reset_list).pack(side='left',padx=(5,0))
+
+        info=ttk.Frame(self.dtab)
+        info.grid(row=2,column=0,sticky='ew')
+        ttk.Label(info,text='Double-click a row to toggle selection.',style='Muted.TLabel').pack(side='left')
+        self.count_label=ttk.Label(info,text='0 items',style='Muted.TLabel')
+        self.count_label.pack(side='right')
+
+        # Library table with vertical + horizontal scrollbars.
+        table_frame=ttk.Frame(self.dtab)
+        table_frame.grid(row=3,column=0,sticky='nsew')
+        table_frame.columnconfigure(0,weight=1)
+        table_frame.rowconfigure(0,weight=1)
+
+        cols=('sel','status','source','title','duration','date','id')
+        self.tree=ttk.Treeview(table_frame,columns=cols,show='headings',selectmode='browse')
+        widths={'sel':55,'status':110,'source':85,'title':510,'duration':75,'date':95,'id':130}
+        heads={'sel':'Pick','status':'Status','source':'Source','title':'Title','duration':'Duration','date':'Date','id':'Media ID'}
+        for c in cols:
+            self.tree.heading(c,text=heads[c])
+            self.tree.column(c,width=widths[c],stretch=(c=='title'))
+
+        tree_v=ttk.Scrollbar(table_frame,orient='vertical',command=self.tree.yview)
+        tree_h=ttk.Scrollbar(table_frame,orient='horizontal',command=self.tree.xview)
+        self.tree.configure(yscrollcommand=tree_v.set,xscrollcommand=tree_h.set)
+        self.tree.grid(row=0,column=0,sticky='nsew')
+        tree_v.grid(row=0,column=1,sticky='ns')
+        tree_h.grid(row=1,column=0,sticky='ew')
+        self.tree.bind('<Double-1>',self._toggle_row)
+
+        # Compact fixed footer: progress + current file + short log.
+        footer=ttk.Frame(self.dtab)
+        footer.grid(row=4,column=0,sticky='ew',pady=(6,0))
+        footer.columnconfigure(1,weight=1)
+        ttk.Label(footer,textvariable=self.status).grid(row=0,column=0,sticky='w')
+        ttk.Progressbar(footer,variable=self.progress,maximum=100).grid(row=0,column=1,sticky='ew',padx=(10,0))
+        ttk.Label(footer,textvariable=self.current_file,style='Muted.TLabel').grid(row=1,column=0,columnspan=2,sticky='ew',pady=(2,0))
+
+        log_frame=ttk.Frame(self.dtab)
+        log_frame.grid(row=5,column=0,sticky='ew',pady=(4,0))
+        log_frame.columnconfigure(0,weight=1)
+        self.log=tk.Text(
+            log_frame,height=4,wrap='none',bg='#080e18',fg='#d7ecff',
+            relief='flat',font=('Consolas',9),state='disabled',padx=8,pady=6
+        )
+        log_v=ttk.Scrollbar(log_frame,orient='vertical',command=self.log.yview)
+        log_h=ttk.Scrollbar(log_frame,orient='horizontal',command=self.log.xview)
+        self.log.configure(yscrollcommand=log_v.set,xscrollcommand=log_h.set)
+        self.log.grid(row=0,column=0,sticky='ew')
+        log_v.grid(row=0,column=1,sticky='ns')
+        log_h.grid(row=1,column=0,sticky='ew')
+
+    def _cookie_changed(self):
+        # Keep the displayed cookie browser in sync immediately.
+        self.refresh_runtime_status()
+        self.auth_status.set('Authentication: not tested for current browser')
     def _history_tab(self):
         b=ttk.Frame(self.htab); b.pack(fill='x',pady=(0,8)); ttk.Label(b,text='Persistent duplicate/download history',style='Muted.TLabel').pack(side='left'); ttk.Button(b,text='Reset Duplicate History',command=self.reset_history).pack(side='right'); ttk.Button(b,text='Refresh',command=self.refresh_history).pack(side='right',padx=5)
         cols=('when','format','source','title','id','path'); self.hist_tree=ttk.Treeview(self.htab,columns=cols,show='headings'); heads={'when':'Downloaded','format':'Format','source':'Source','title':'Title','id':'Media ID','path':'Output'}; widths={'when':150,'format':70,'source':90,'title':360,'id':130,'path':380}
@@ -189,7 +317,15 @@ class App(tk.Tk):
                 elif k=='row_status': self._row_status(v[0],v[1])
                 elif k=='auth_result':
                     ok,msg=v
-                    self.auth_status.set(msg)
+                    if ok:
+                        self.auth_status.set('YouTube authentication: PASSED')
+                    else:
+                        self.auth_status.set('YouTube authentication: FAILED — see message/log')
+                    # Test button remains permanently visible and enabled after success/failure.
+                    try:
+                        self.auth_test_btn.config(state='normal')
+                    except Exception:
+                        pass
                     if not ok:
                         messagebox.showwarning('YouTube authentication', msg)
         except queue.Empty: pass
@@ -237,7 +373,11 @@ class App(tk.Tk):
         if not url:
             messagebox.showinfo('Test YouTube Auth','Enter at least one YouTube video, playlist, or channel URL first.')
             return
-        self.auth_status.set('Authentication: testing…')
+        self.auth_status.set('YouTube authentication: testing…')
+        try:
+            self.auth_test_btn.config(state='disabled')
+        except Exception:
+            pass
         self._log(f"AUTH TEST | YouTube | Browser cookies={self.cookie_browser.get()} | URL={url}")
         threading.Thread(target=self._test_youtube_auth_worker,args=(url,),daemon=True).start()
 
